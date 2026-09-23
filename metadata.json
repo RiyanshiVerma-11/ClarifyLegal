@@ -1,0 +1,7 @@
+{
+  "name": "ClarifyLegal: Legal Navigator & Document Assistant",
+  "description": "GenAI-powered platform that simplifies legal documents, translates legalese into plain English, compares contracts, and provides actionable negotiation next steps.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
