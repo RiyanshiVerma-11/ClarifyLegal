@@ -2,6 +2,12 @@
 
 > **AI-powered contract risk intelligence, real-time Gemini 3.8 Live voice conversations, multi-turn legal advisory chatbot (Pro, 3.5 Flash & Flash-Lite), side-by-side revision diffing, plain-English jargon decoding, and simulated counterparty pushback.**
 
+[![Live Demo](https://img.shields.io/badge/⚡_Live_Demo-Try_ClarifyLegal_Now-teal?style=for-the-badge&logo=google&logoColor=white)](https://ai.studio/apps/c88c044a-9f6c-416b-ab9b-6e7ab0a74b95?fullscreenApplet=true)
+[![Google Gemini](https://img.shields.io/badge/Powered_by-Gemini_3.8_Live_%26_3.5_Flash-blue?style=for-the-badge&logo=googlegemini&logoColor=white)](https://aistudio.google.com/)
+
+🔗 **Live Interactive Applet:** [https://ai.studio/apps/c88c044a-9f6c-416b-ab9b-6e7ab0a74b95?fullscreenApplet=true](https://ai.studio/apps/c88c044a-9f6c-416b-ab9b-6e7ab0a74b95?fullscreenApplet=true)  
+*(Includes 1-Click Judge/Evaluator authentication with pre-loaded high-risk lease and freelance contracts)*
+
 ---
 
 ## 📌 GitHub Repository Details
