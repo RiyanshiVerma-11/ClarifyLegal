@@ -77,10 +77,10 @@ ClarifyLegal pairs a high-performance React 19 SPA with a unified Node.js/Expres
 graph TB
     subgraph ClientBrowser [Client Browser Environment]
         direction TB
-        UI[React 19 SPA - Tailwind CSS v4]
-        WebAudio[Web Audio API Engine: 16kHz Mic & 24kHz PCM Playback]
-        CanvasVis[HTML5 Canvas Real-Time Waveform Visualizer]
-        State[State Management & LocalStorage Persistence]
+        UI["React 19 SPA - Tailwind CSS v4"]
+        WebAudio["Web Audio API Engine: 16kHz Mic and 24kHz Playback"]
+        CanvasVis["HTML5 Canvas Real-Time Waveform Visualizer"]
+        State["State Management and LocalStorage Persistence"]
         
         UI --> WebAudio
         UI --> CanvasVis
@@ -89,11 +89,11 @@ graph TB
 
     subgraph ServerContainer [Full-Stack Node.js Container : Port 3000]
         direction TB
-        ExpressServer[Express.js Reverse Proxy & API Gateway]
-        WSServer[WebSocket Server: /live-voice Gateway]
-        StaticEngine[Vite Dev Middleware / Express Static Bundle]
-        FallbackEngine[Deterministic Legal Heuristics Engine]
-        GenAISDK[Official @google/genai TypeScript SDK Client]
+        ExpressServer["Express.js Reverse Proxy and API Gateway"]
+        WSServer["WebSocket Server: /live-voice Gateway"]
+        StaticEngine["Vite Dev Middleware or Express Static Bundle"]
+        FallbackEngine["Deterministic Legal Heuristics Engine"]
+        GenAISDK["Official @google/genai TypeScript SDK Client"]
         
         ExpressServer --> WSServer
         ExpressServer --> StaticEngine
@@ -104,16 +104,16 @@ graph TB
 
     subgraph GoogleCloudAI [Google GenAI Cloud Foundation Infrastructure]
         direction TB
-        LiveModel[gemini-3.8-live: Real-Time Bidirectional Voice Session]
-        ProModel[gemini-3.1-pro-preview: Deep Forensic Legal Reasoning]
-        FlashModel[gemini-3.5-flash: Balanced Multi-Turn Contract Intelligence]
-        LiteModel[gemini-3.1-flash-lite: High-Velocity Rapid Triage]
+        LiveModel["gemini-3.8-live: Real-Time Bidirectional Voice Session"]
+        ProModel["gemini-3.1-pro-preview: Deep Forensic Legal Reasoning"]
+        FlashModel["gemini-3.5-flash: Balanced Multi-Turn Contract Intelligence"]
+        LiteModel["gemini-3.1-flash-lite: High-Velocity Rapid Triage"]
     end
 
-    UI -->|JSON REST Requests: /api/*| ExpressServer
-    WebAudio <-->|Bidirectional Binary PCM Stream: ws://host/live-voice| WSServer
-    StaticEngine -->|HTML / CSS / JS Assets| UI
-    GenAISDK <-->|Live API WebSockets: Modality.AUDIO| LiveModel
+    UI -->|JSON REST Requests| ExpressServer
+    WebAudio ---|Bidirectional PCM Audio Stream over WebSocket| WSServer
+    StaticEngine -->|HTML and JS and CSS Assets| UI
+    GenAISDK ---|Live API WebSockets Audio Modality| LiveModel
     GenAISDK -->|HTTPS Encrypted API Calls| ProModel
     GenAISDK -->|HTTPS Encrypted API Calls| FlashModel
     GenAISDK -->|HTTPS Encrypted API Calls| LiteModel
@@ -128,43 +128,42 @@ The voice studio establishes low-latency, bidirectional audio streaming between 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as User (Speaker / Listener)
-    participant Mic as Browser Web Audio (16 kHz PCM)
+    actor User as User
+    participant Mic as Browser Web Audio
     participant WSClient as React Client (VoiceLiveAssistant)
-    participant Canvas as Canvas Waveform Visualizer
-    participant WSServer as Express WebSocket Server (/live-voice)
-    participant GeminiLive as Google GenAI Live API (gemini-3.8-live)
-    participant Speaker as Browser AudioContext (24 kHz PCM Playback)
+    participant Canvas as Canvas Waveform
+    participant WSServer as Express WebSocket Server
+    participant GeminiLive as Google Gemini 3.8 Live API
+    participant Speaker as Browser AudioContext
 
-    User->>WSClient: Clicks "Start Live Conversation"
-    WSClient->>WSServer: Connect ws://localhost:3000/live-voice?voice=Zephyr&role=advisor
-    WSServer->>GeminiLive: ai.live.connect({ model: "gemini-3.8-live", responseModalities: [AUDIO] })
-    GeminiLive-->>WSServer: Live Session Initialized
-    WSServer-->>WSClient: { type: "connected", model: "gemini-3.8-live", voice: "Zephyr" }
-    
-    par Continuous Audio Ingestion & Visualization
-        User->>Mic: Speaks question / negotiation scenario
-        Mic->>Canvas: Float32Array Time-Domain Data -> Draw Real-Time Bars
-        Mic->>WSClient: 16-bit Mono PCM Base64 Audio Chunks
-        WSClient->>WSServer: { type: "audio", audio: base64Pcm16k }
-        WSServer->>GeminiLive: session.sendRealtimeInput({ audio: { data, mimeType: "audio/pcm;rate=16000" } })
-    and Live Transcriptions & Synthetic Speech Playback
-        GeminiLive-->>WSServer: serverContent.outputAudioTranscription { text }
-        WSServer-->>WSClient: { type: "model_transcript", text: "..." }
-        WSClient->>WSClient: Append to Live Transcript Feed
-        
-        GeminiLive-->>WSServer: serverContent.modelTurn.parts { inlineData: audio/pcm;rate=24000 }
-        WSServer-->>WSClient: { type: "audio", audio: base64Pcm24k }
-        WSClient->>Speaker: Schedule next AudioBufferSourceNode in continuous playback queue
-        Speaker-->>User: Plays natural synthetic voice response (Zephyr, Kore, etc.)
-    end
+    User->>WSClient: Start Live Conversation
+    WSClient->>WSServer: Connect ws to /live-voice with voice and role
+    WSServer->>GeminiLive: ai.live.connect with gemini-3.8-live
+    GeminiLive-->>WSServer: Live Session Ready
+    WSServer-->>WSClient: Connected status event
+
+    Note over User,WSClient: Continuous 16kHz Audio Ingestion
+    User->>Mic: Speaks contract query or counter-proposal
+    Mic->>Canvas: Time-domain audio buffer for real-time waveform bars
+    Mic->>WSClient: 16-bit Mono PCM chunks at 16000 Hz
+    WSClient->>WSServer: JSON payload with base64 PCM audio
+    WSServer->>GeminiLive: session.sendRealtimeInput real-time audio chunk
+
+    Note over GeminiLive,Speaker: Real-Time Synthetic Audio and Transcripts
+    GeminiLive-->>WSServer: Real-time text transcript chunk
+    WSServer-->>WSClient: Model transcript event
+    WSClient->>WSClient: Update Live Transcript Feed UI
+    GeminiLive-->>WSServer: 24kHz PCM synthesized speech chunk
+    WSServer-->>WSClient: Binary audio event
+    WSClient->>Speaker: Schedule next AudioBufferSourceNode in queue
+    Speaker-->>User: Plays natural voice response (Zephyr, Kore, Fenrir)
 
     opt User Interrupts Model Speaking
-        User->>WSClient: Clicks "Interrupt AI" or speaks while model output active
-        WSClient->>Speaker: Stop active AudioBufferSourceNodes & clear queue
-        WSClient->>WSServer: Client sends fresh audio input chunk
-        GeminiLive-->>WSServer: serverContent.interrupted: true
-        WSServer-->>WSClient: { type: "interrupted", interrupted: true }
+        User->>WSClient: Clicks Interrupt AI or speaks new audio
+        WSClient->>Speaker: Stop active buffer sources and clear queue
+        WSClient->>WSServer: Stream fresh microphone audio
+        GeminiLive-->>WSServer: Turn interrupted event
+        WSServer-->>WSClient: Acknowledge interruption state
     end
 ```
 
@@ -176,36 +175,36 @@ The multi-turn chatbot dynamically selects the optimal Gemini model, system prom
 
 ```mermaid
 flowchart TD
-    A[User Inputs Prompt / Selects Role] --> B{Selected Role Profile}
+    A[User Inputs Prompt or Selects Role] --> B{Selected Role Profile}
 
     B -->|Complex Reasoning| C[gemini-3.1-pro-preview]
     B -->|General Tasks| D[gemini-3.5-flash]
     B -->|Rapid Tasks| E[gemini-3.1-flash-lite]
 
-    C --> F[Forensic Legal Counsel Persona:\nStatutory Analysis, Enforceability, Surgical Counter-Drafting]
-    D --> G[Contract Navigator Persona:\nPlain-English Translation, Risk Diagnostics, Negotiation Strategy]
-    E --> H[Rapid Legal Assistant Persona:\nInstant Definitions, High-Velocity Bullet Points, Rapid Triage]
+    C --> F["Forensic Legal Counsel Persona<br/>Statutory Analysis, Enforceability, Surgical Counter-Drafting"]
+    D --> G["Contract Navigator Persona<br/>Plain-English Translation, Risk Diagnostics, Negotiation Strategy"]
+    E --> H["Rapid Legal Assistant Persona<br/>Instant Definitions, High-Velocity Bullet Points, Rapid Triage"]
 
     F --> I[Merge Custom System Instructions if Provided]
     G --> I
     H --> I
 
     I --> J{Active Document Context Enabled?}
-    J -->|Yes| K[Inject Contract Summary, Risk Level, & Critical Clauses into System Prompt]
+    J -->|Yes| K[Inject Contract Summary, Risk Level, and Critical Clauses into System Prompt]
     J -->|No| L[Proceed with Clean Global Legal Context]
 
-    K --> M[Build Structured Multi-Turn History: user & model turns]
+    K --> M[Build Structured Multi-Turn History: user and model turns]
     L --> M
 
     M --> N[Express Route: POST /api/chat/conversation]
     N --> O{Gemini Client Configured?}
     
     O -->|Yes| P[Execute Google GenAI SDK call with active model]
-    O -->|Fallback / Limit| Q[Deterministic Heuristic Advisory Engine]
+    O -->|Fallback or Limit| Q[Deterministic Heuristic Advisory Engine]
 
-    P --> R[Markdown Formatted Response with Model Badge & Timestamp]
+    P --> R[Markdown Formatted Response with Model Badge and Timestamp]
     Q --> R
-    R --> S[Append to Reactive Chat Thread & Enable 1-Click Copy / Export .md]
+    R --> S[Append to Reactive Chat Thread and Enable 1-Click Copy or Export]
 ```
 
 ---
@@ -216,34 +215,34 @@ Documents uploaded or pasted into the workspace undergo structural parsing, risk
 
 ```mermaid
 flowchart TD
-    A[Legal Document Source: .txt, .pdf, .docx, or Paste] --> B[Client Ingestion & Normalization]
-    B --> C[POST /api/analyze-contract]
+    A["Legal Document Source: .txt, .pdf, .docx, or Paste"] --> B["Client Ingestion and Normalization"]
+    B --> C["POST /api/analyze-contract"]
 
     subgraph ServerAnalysisPipeline [Server Analysis Pipeline]
         C --> D{Gemini API Configured?}
-        D -->|Yes| E[Gemini Flash Analysis with JSON Schema]
-        D -->|No / Fallback| F[Regex & Domain Heuristic Evaluator]
+        D -->|Yes| E["Gemini Flash Analysis with JSON Schema"]
+        D -->|No or Fallback| F["Regex and Domain Heuristic Evaluator"]
         
-        E --> G[Extract Summary & Compute Risk Score 0-100]
+        E --> G["Extract Summary and Compute Risk Score 0-100"]
         F --> G
         
-        G --> H[Categorize Risk Strata: Low 0-25 | Moderate 26-50 | High 51-75 | Severe 76-100]
-        G --> I[Extract Critical Clauses: Indemnity, Auto-Renewal, Termination, IP, etc.]
-        G --> J[Map Dual Perspective: User Obligations vs. Counterparty Commitments]
-        G --> K[Identify Hidden Traps & Missing Protective Terms]
-        G --> L[Compile Pre-Signing Safety Checklist]
+        G --> H["Categorize Risk Strata: Low, Moderate, High, Severe"]
+        G --> I["Extract Critical Clauses: Indemnity, Auto-Renewal, Termination, IP"]
+        G --> J["Map Dual Perspective: User Obligations vs Counterparty Commitments"]
+        G --> K["Identify Hidden Traps and Missing Protective Terms"]
+        G --> L["Compile Pre-Signing Safety Checklist"]
     end
 
-    H --> M[Unified ContractAnalysis JSON Response]
+    H --> M["Unified ContractAnalysis JSON Response"]
     I --> M
     J --> M
     K --> M
     L --> M
 
-    M --> N[Interactive Document Viewer: Bidirectional Highlighting]
-    M --> O[Risk Score Gauge & Executive Summary]
-    M --> P[Obligations & Liabilities Matrix]
-    M --> Q[Pre-Signing Checklist with Verification Checkboxes]
+    M --> N["Interactive Document Viewer: Bidirectional Highlighting"]
+    M --> O["Risk Score Gauge and Executive Summary"]
+    M --> P["Obligations and Liabilities Matrix"]
+    M --> Q["Pre-Signing Checklist with Verification Checkboxes"]
 ```
 
 ---
@@ -255,26 +254,26 @@ The comparison module evaluates two drafts of an agreement to identify semantic 
 ```mermaid
 graph LR
     subgraph InputDrafts [Input Document Drafts]
-        DocA[Document A: Original Draft]
-        DocB[Document B: Revised / Counterparty Markup]
+        DocA["Document A: Original Draft"]
+        DocB["Document B: Revised Draft"]
     end
 
-    subgraph SemanticDiffEngine [Semantic Alignment & Risk Analysis]
-        Align[Clause-to-Clause Topic Alignment]
-        Detect[Change Categorization: Added / Removed / Modified / Identical]
-        Impact[Significance Grading: High / Medium / Low]
-        Shift[Leverage Shift Metric: More Favorable / Neutral / More Risky]
+    subgraph SemanticDiffEngine [Semantic Alignment and Risk Analysis]
+        Align["Clause-to-Clause Topic Alignment"]
+        Detect["Change Categorization: Added, Removed, Modified, Identical"]
+        Impact["Significance Grading: High, Medium, Low"]
+        Shift["Leverage Shift Metric: Favorable, Neutral, Risky"]
     end
 
-    subgraph OutputSynthesis [Strategic Verdict & Guidance]
-        Verdict[Executive Execution Verdict]
-        Takeaways[Key Strategic Takeaways]
-        Recommendations[Clause-by-Clause Action Recommendations]
+    subgraph OutputSynthesis [Strategic Verdict and Guidance]
+        Verdict["Executive Execution Verdict"]
+        Takeaways["Key Strategic Takeaways"]
+        Recommendations["Clause-by-Clause Action Recommendations"]
     end
 
     subgraph UIViewer [Visual Presentation]
-        DiffCards[Color-Coded Clause Diff Cards]
-        VerdictBanner[Balance of Power Verdict Banner]
+        DiffCards["Color-Coded Clause Diff Cards"]
+        VerdictBanner["Balance of Power Verdict Banner"]
     end
 
     DocA --> Align
@@ -298,12 +297,12 @@ This module predicts how the opposing party will react to a proposed amendment a
 ```mermaid
 stateDiagram-v2
     [*] --> SelectPersona: Choose Persona (Landlord, Enterprise Legal, Startup Founder, SaaS, Custom)
-    SelectPersona --> InputClause: Enter original clause & desired amendment
+    SelectPersona --> InputClause: Enter original clause and desired amendment
     InputClause --> DispatchAPI: POST /api/simulate-counterparty-response
 
     state SimulationEngine {
-        PersonaModeling: Adopt organizational constraints & risk thresholds
-        ObjectionMining: Identify operational, financial, & statutory resistance
+        PersonaModeling: Adopt organizational constraints and risk thresholds
+        ObjectionMining: Identify operational and financial and legal resistance
         IncentiveAnalysis: Uncover internal motivations (cash flow, audit risk, precedent)
         ScriptSynthesis: Craft ready-to-send winning rebuttal script
     }
@@ -315,11 +314,11 @@ stateDiagram-v2
         SimulatedEmail: Realistic pushback email with authentic corporate rationale
         CoreObjections: Bulleted list of primary pushback points
         UnderlyingIncentive: Unpacked hidden fears and organizational motivations
-        WinningComeback: Polished, professional rebuttal script ready to send
+        WinningComeback: Polished professional rebuttal script ready to send
         ConcessionOdds: Concession likelihood probability badge
     }
 
-    RenderResults --> [*]: 1-Click Copy Script & Execute Counter-Proposal
+    RenderResults --> [*]: Copy Script and Execute Counter-Proposal
 ```
 
 ---
@@ -330,25 +329,25 @@ Users can convert risk findings into an amended agreement with predatory languag
 
 ```mermaid
 graph TD
-    A[Analyzed Contract in State] --> B[Filter Red-Risk / Critical Clauses]
-    B --> C[Extract Original Excerpt & Custom Counter-Proposal]
+    A["Analyzed Contract in State"] --> B["Filter Red-Risk and Critical Clauses"]
+    B --> C["Extract Original Excerpt and Custom Counter-Proposal"]
     
     subgraph ReplacementCore [Surgical Text Replacement Engine]
-        C --> D[Exact Substring Matcher]
-        D -->|If Exact Miss| E[Whitespace & Token Normalized Matcher]
-        E --> F[Substitute Unfair Language with Custom Safe Counter-Clause]
-        F --> G[Generate Redline Audit Trail: Section, Original, Amended, Rationale]
+        C --> D["Exact Substring Matcher"]
+        D -->|If Exact Miss| E["Whitespace and Token Normalized Matcher"]
+        E --> F["Substitute Unfair Language with Custom Safe Counter-Clause"]
+        F --> G["Generate Redline Audit Trail: Section, Original, Amended, Rationale"]
     end
 
-    G --> H[Render Clean Amended Agreement Modal]
+    G --> H["Render Clean Amended Agreement Modal"]
     
-    subgraph ExportActions [Export & Distribution]
-        H --> I[Full Clean Agreement View: Ready to Sign]
-        H --> J[Redline Diff View: Side-by-Side Audit]
-        I --> K[1-Click Copy Clean Draft]
-        I --> L[Download as .txt / .md]
-        I --> M[Print / Save to PDF]
-        J --> N[Copy Redline Summary for Counterparty]
+    subgraph ExportActions [Export and Distribution]
+        H --> I["Full Clean Agreement View: Ready to Sign"]
+        H --> J["Redline Diff View: Side-by-Side Audit"]
+        I --> K["1-Click Copy Clean Draft"]
+        I --> L["Download as txt or md"]
+        I --> M["Print or Save to PDF"]
+        J --> N["Copy Redline Summary for Counterparty"]
     end
 ```
 
@@ -360,19 +359,19 @@ Supports drag-and-drop or manual upload of contracts with browser-native text ex
 
 ```mermaid
 flowchart LR
-    A[File Input / Drag & Drop Target] --> B{MIME / Extension Detection}
+    A["File Input or Drag and Drop Target"] --> B{MIME or Extension Detection}
     
-    B -->|.txt / .md| C[UTF-8 FileReader Stream]
-    B -->|.docx / .doc| D[Client-Side XML & Paragraph Extractor]
+    B -->|.txt or .md| C[UTF-8 FileReader Stream]
+    B -->|.docx or .doc| D[Client-Side XML and Paragraph Extractor]
     B -->|.pdf| E[PDF Stream Text Extractor]
 
-    C --> F[Text Cleaning & Linebreak Normalization]
+    C --> F[Text Cleaning and Linebreak Normalization]
     D --> F
     E --> F
 
-    F --> G[Compute Instant Word & Character Counts]
+    F --> G[Compute Instant Word and Character Counts]
     F --> H[Generate Truncated Preview Snippet]
-    F --> I[Auto-Populate Editable Raw Textarea & Document Title]
+    F --> I[Auto-Populate Editable Raw Textarea and Document Title]
     G --> J[Display Parsing Banner with Format Badge]
     H --> J
 ```
@@ -386,22 +385,22 @@ The user interface follows a modern dual-tone design: an authoritative **Dark Si
 ```mermaid
 graph TD
     subgraph WorkspaceContainer [Full-Viewport Workspace]
-        Sidebar[WorkspaceSidebar: Dark Theme - bg-slate-950 / text-slate-300]
-        MainContent[Main Content Canvas: Light Theme - bg-slate-50 / text-slate-900]
+        Sidebar["WorkspaceSidebar (Dark Theme: bg-slate-950)"]
+        MainContent["Main Content Canvas (Light Theme: bg-slate-50)"]
     end
 
     Sidebar -->|Navigation State| AppRoot[App Root Component]
     
-    subgraph LightWorkspaceViews [Light-Themed Workspaces - bg-white Cards & Crisp Typography]
-        Header[WorkspaceHeader: Active Tab Title, Evaluator Demo Pill, Disclaimer Modal]
-        Dashboard[DashboardHub: Quick Start Cards, Risk Metrics, Feature Hubs]
-        Analyzer[DocumentAnalyzer: Ingestion Dropzone, 0-100 Risk Gauge, InteractiveViewer]
-        LiveVoice[VoiceLiveAssistant: 3.8 Live Waveform Canvas, Mic Controls, Spoken Feed]
-        Chatbot[GeminiChatbot: Pro/Flash/Lite Model Switcher, System Instructions, Thread]
-        Compare[DocumentCompare: Dual-Column Diff Viewer, Leverage Shift Gauge]
-        Playbook[ActionPlaybook: Tone Selectors, Redline Drafts, Counterparty Simulator]
-        Decoder[JargonDecoder: Micro-Clause Input, 5th-Grade Plain English Breakdown]
-        Navigator[LegalNavigator: Categorized Legal Q&A, Statutory Safeguards]
+    subgraph LightWorkspaceViews [Light-Themed Workspaces - White Cards and Crisp Typography]
+        Header["WorkspaceHeader (Active Tab Title and Demo Controls)"]
+        Dashboard["DashboardHub (Quick Start Cards and Risk Metrics)"]
+        Analyzer["DocumentAnalyzer (0-100 Risk Gauge and Viewer)"]
+        LiveVoice["VoiceLiveAssistant (3.8 Live Waveform and Mic Controls)"]
+        Chatbot["GeminiChatbot (Pro, Flash and Lite Model Switcher)"]
+        Compare["DocumentCompare (Dual-Column Diff Viewer)"]
+        Playbook["ActionPlaybook (Tone Selectors and Redline Drafts)"]
+        Decoder["JargonDecoder (5th-Grade Plain English Breakdown)"]
+        Navigator["LegalNavigator (Categorized Legal Q and A)"]
     end
 
     AppRoot --> Header
@@ -425,18 +424,18 @@ API keys and sensitive tokens are strictly confined to the backend server enviro
 ```mermaid
 graph TD
     subgraph PublicBrowser [Client Browser - Public Sandbox]
-        ReactApp[React 19 Application]
-        NoKeys[Zero Secret Keys / No VITE_GEMINI_API_KEY]
-        PublicBrowserStore[Client LocalStorage: Anonymized Analysis Cache]
+        ReactApp["React 19 Application"]
+        NoKeys["Zero Secret Keys / No VITE Client Secrets"]
+        PublicBrowserStore["Client LocalStorage: Anonymized Analysis Cache"]
         ReactApp --- NoKeys
         ReactApp --- PublicBrowserStore
     end
 
     subgraph ProtectedServer [Node.js Container - Secure Boundary]
-        APIProxy[Express API Gateway - server.ts]
-        EnvConfig[Server Environment: process.env.GEMINI_API_KEY]
-        SanitizerMiddleware[Input Payload Validation & Truncation Middleware]
-        TelemetryHeader[Telemetry Header: User-Agent: aistudio-build]
+        APIProxy["Express API Gateway - server.ts"]
+        EnvConfig["Server Environment: process.env.GEMINI_API_KEY"]
+        SanitizerMiddleware["Input Payload Validation and Truncation Middleware"]
+        TelemetryHeader["Telemetry Header: User-Agent aistudio-build"]
         
         APIProxy --- EnvConfig
         APIProxy --- SanitizerMiddleware
@@ -444,13 +443,13 @@ graph TD
     end
 
     subgraph GoogleAIEndpoint [Google GenAI Cloud Endpoint]
-        GeminiCloud[https://generativelanguage.googleapis.com]
+        GeminiCloud["https://generativelanguage.googleapis.com"]
     end
 
-    ReactApp -->|REST POST /api/* & WebSocket /live-voice| APIProxy
-    APIProxy -->|Authenticated HTTPS / WSS with Private API Key| GeminiCloud
+    ReactApp -->|REST POST API Calls and WebSocket Live Stream| APIProxy
+    APIProxy -->|Authenticated HTTPS and WSS with Private API Key| GeminiCloud
     GeminiCloud -->|Encrypted Streaming Response| APIProxy
-    APIProxy -->|Sanitized JSON / Audio Frames| ReactApp
+    APIProxy -->|Sanitized JSON and Binary Audio Frames| ReactApp
 ```
 
 ---
