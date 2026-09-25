@@ -41,7 +41,7 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
   const [hasActiveMic, setHasActiveMic] = useState<boolean>(true);
   const [customSpokenPrompt, setCustomSpokenPrompt] = useState('');
   const [micLevel, setMicLevel] = useState<number>(0);
-  const [speechLanguage, setSpeechLanguage] = useState<'hi-IN' | 'en-IN' | 'en-US'>('hi-IN');
+  const [speechLanguage, setSpeechLanguage] = useState<'en-US' | 'en-IN' | 'hi-IN'>('en-US');
   const [interimText, setInterimText] = useState<string>('');
 
   // Configuration options
@@ -76,6 +76,10 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
   const sessionStateRef = useRef(sessionState);
   const silenceTimerRef = useRef<any>(null);
   const currentInterimRef = useRef<string>('');
+
+  // Acoustic Echo Cancellation Guards (Prevents AI from hearing itself through laptop speakers)
+  const isSpeakingRef = useRef<boolean>(false);
+  const lastSpokenEndTimeRef = useRef<number>(0);
 
   useEffect(() => {
     sessionStateRef.current = sessionState;
@@ -143,6 +147,15 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
 
   // Helper: Send spoken query directly to Gemini 3.8 Live
   const sendSpokenQuery = useCallback((textToSend: string) => {
+    // CRITICAL ACOUSTIC ECHO SHIELD:
+    // If the model is speaking or finished speaking within the last 1500ms,
+    // REJECT immediately. This blocks the microphone from sending the model's
+    // own speaker audio back to itself in an infinite loop.
+    if (isSpeakingRef.current || Date.now() < lastSpokenEndTimeRef.current + 1500) {
+      console.log('Echo Shield: Ignored query while model audio active:', textToSend);
+      return;
+    }
+
     const text = textToSend.trim();
     if (!text) return;
 
@@ -226,6 +239,8 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
       nextStartTimeRef.current += audioBuffer.duration;
       activeSourcesRef.current.push(source);
 
+      // Model audio is actively scheduled and playing
+      isSpeakingRef.current = true;
       setIsSpeaking(true);
 
       source.onended = () => {
@@ -234,6 +249,8 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
           activeSourcesRef.current.splice(idx, 1);
         }
         if (activeSourcesRef.current.length === 0) {
+          isSpeakingRef.current = false;
+          lastSpokenEndTimeRef.current = Date.now();
           setIsSpeaking(false);
         }
       };
@@ -253,6 +270,8 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
     if (outputAudioCtxRef.current) {
       nextStartTimeRef.current = outputAudioCtxRef.current.currentTime;
     }
+    isSpeakingRef.current = false;
+    lastSpokenEndTimeRef.current = Date.now();
     setIsSpeaking(false);
   }, []);
 
@@ -466,6 +485,17 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
                 setMicLevel(0);
                 return;
               }
+
+              // CRITICAL ACOUSTIC ECHO SHIELD:
+              // If the AI model is speaking or finished speaking within the last 1500ms,
+              // completely MUTE microphone capture to prevent the model from hearing
+              // its own voice through laptop speakers.
+              if (isSpeakingRef.current || Date.now() < lastSpokenEndTimeRef.current + 1500) {
+                setMicLevel(0);
+                setIsListening(false);
+                return;
+              }
+
               if (ws.readyState !== WebSocket.OPEN) return;
 
               const channelData = e.inputBuffer.getChannelData(0);
@@ -508,6 +538,14 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
             recognition.lang = speechLanguage;
 
             recognition.onresult = (event: any) => {
+              // ECHO SHIELD: If model is speaking or recently spoke, completely discard!
+              if (isSpeakingRef.current || Date.now() < lastSpokenEndTimeRef.current + 1500) {
+                currentInterimRef.current = '';
+                setInterimText('');
+                setIsListening(false);
+                return;
+              }
+
               let interim = '';
               let finalChunk = '';
 
@@ -521,6 +559,11 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
 
               const speechText = (finalChunk || interim).trim();
               if (speechText) {
+                // Secondary check before processing
+                if (isSpeakingRef.current || Date.now() < lastSpokenEndTimeRef.current + 1500) {
+                  return;
+                }
+
                 currentInterimRef.current = speechText;
                 setInterimText(speechText);
                 setIsListening(true);
@@ -528,15 +571,22 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
                 // Auto-commit on 1.2 seconds of silence
                 if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
                 silenceTimerRef.current = setTimeout(() => {
-                  if (currentInterimRef.current.trim() && sessionStateRef.current === 'active') {
+                  if (
+                    currentInterimRef.current.trim() && 
+                    sessionStateRef.current === 'active' &&
+                    !isSpeakingRef.current &&
+                    Date.now() > lastSpokenEndTimeRef.current + 1500
+                  ) {
                     sendSpokenQuery(currentInterimRef.current.trim());
                   }
                 }, 1200);
               }
 
               if (finalChunk && finalChunk.trim()) {
-                if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-                sendSpokenQuery(finalChunk.trim());
+                if (!isSpeakingRef.current && Date.now() > lastSpokenEndTimeRef.current + 1500) {
+                  if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+                  sendSpokenQuery(finalChunk.trim());
+                }
               }
             };
 
