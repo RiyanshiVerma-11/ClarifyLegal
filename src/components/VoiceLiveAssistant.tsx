@@ -19,7 +19,8 @@ import {
   HelpCircle,
   Activity,
   Sliders,
-  ChevronDown
+  ChevronDown,
+  ExternalLink
 } from 'lucide-react';
 import { ContractAnalysisResult, LiveVoiceTranscriptItem } from '../types';
 
@@ -36,6 +37,12 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
   const [isSpeaking, setIsSpeaking] = useState(false); // Model is speaking
   const [isListening, setIsListening] = useState(false); // User speaking into mic
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [micNotice, setMicNotice] = useState<string | null>(null);
+  const [hasActiveMic, setHasActiveMic] = useState<boolean>(true);
+  const [customSpokenPrompt, setCustomSpokenPrompt] = useState('');
+  const [micLevel, setMicLevel] = useState<number>(0);
+  const [speechLanguage, setSpeechLanguage] = useState<'hi-IN' | 'en-IN' | 'en-US'>('hi-IN');
+  const [interimText, setInterimText] = useState<string>('');
 
   // Configuration options
   const [selectedVoice, setSelectedVoice] = useState<'Zephyr' | 'Puck' | 'Charon' | 'Kore' | 'Fenrir'>('Zephyr');
@@ -65,6 +72,14 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameIdRef = useRef<number | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
+  const recognitionRef = useRef<any>(null);
+  const sessionStateRef = useRef(sessionState);
+  const silenceTimerRef = useRef<any>(null);
+  const currentInterimRef = useRef<string>('');
+
+  useEffect(() => {
+    sessionStateRef.current = sessionState;
+  }, [sessionState]);
 
   // Keep mute status updated in callback ref
   const isMicMutedRef = useRef(isMicMuted);
@@ -72,16 +87,49 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
     isMicMutedRef.current = isMicMuted;
   }, [isMicMuted]);
 
+  // Dynamically update speech recognition language
+  useEffect(() => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.lang = speechLanguage;
+      } catch (e) {}
+    }
+  }, [speechLanguage]);
+
   // Scroll to bottom on new transcripts
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [transcripts]);
 
-  // Helper: Float32Array to 16-bit PCM Base64
-  const pcmToBase64 = (pcmData: Float32Array): string => {
-    const int16 = new Int16Array(pcmData.length);
-    for (let i = 0; i < pcmData.length; i++) {
-      const s = Math.max(-1, Math.min(1, pcmData[i]));
+  // Linear Downsampler from device sample rate to 16kHz
+  const downsampleTo16k = (buffer: Float32Array, inputRate: number): Float32Array => {
+    if (inputRate === 16000) return buffer;
+    const ratio = inputRate / 16000;
+    const newLength = Math.round(buffer.length / ratio);
+    const result = new Float32Array(newLength);
+    let offsetResult = 0;
+    let offsetBuffer = 0;
+    while (offsetResult < result.length) {
+      const nextOffsetBuffer = Math.round((offsetResult + 1) * ratio);
+      let accum = 0;
+      let count = 0;
+      for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+        accum += buffer[i];
+        count++;
+      }
+      result[offsetResult] = count > 0 ? accum / count : buffer[offsetBuffer] || 0;
+      offsetResult++;
+      offsetBuffer = nextOffsetBuffer;
+    }
+    return result;
+  };
+
+  // Helper: Float32Array to 16-bit PCM Base64 with sample rate normalization
+  const pcmToBase64 = (pcmData: Float32Array, inputRate: number): string => {
+    const resampled = downsampleTo16k(pcmData, inputRate);
+    const int16 = new Int16Array(resampled.length);
+    for (let i = 0; i < resampled.length; i++) {
+      const s = Math.max(-1, Math.min(1, resampled[i]));
       int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
     }
     const bytes = new Uint8Array(int16.buffer);
@@ -93,32 +141,67 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
     return btoa(binary);
   };
 
+  // Helper: Send spoken query directly to Gemini 3.8 Live
+  const sendSpokenQuery = useCallback((textToSend: string) => {
+    const text = textToSend.trim();
+    if (!text) return;
+
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    currentInterimRef.current = '';
+    setInterimText('');
+
+    setTranscripts(prev => [
+      ...prev,
+      {
+        id: `user-${Date.now()}`,
+        sender: 'user',
+        text,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+    ]);
+
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'text',
+        text
+      }));
+    }
+  }, []);
+
   // Helper: Gapless Playback of 24kHz Model Audio Chunk
   const playAudioChunk = useCallback((base64Audio: string) => {
-    if (!outputAudioCtxRef.current) {
-      outputAudioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({
-        sampleRate: 24000,
-      });
-      analyserRef.current = outputAudioCtxRef.current.createAnalyser();
-      analyserRef.current.fftSize = 64;
-      analyserRef.current.connect(outputAudioCtxRef.current.destination);
+    let ctx = outputAudioCtxRef.current;
+    if (!ctx || ctx.state === 'closed') {
+      try {
+        ctx = new (window.AudioContext || (window as any).webkitAudioContext)({
+          sampleRate: 24000,
+        });
+      } catch (e) {
+        ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      outputAudioCtxRef.current = ctx;
     }
 
-    const ctx = outputAudioCtxRef.current;
-    if (ctx.state === 'suspended') {
-      ctx.resume();
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
     }
 
     try {
       const binary = atob(base64Audio);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-      }
-      const int16 = new Int16Array(bytes.buffer);
-      const float32 = new Float32Array(int16.length);
-      for (let i = 0; i < int16.length; i++) {
-        float32[i] = int16[i] / 32768.0;
+      const len = binary.length;
+      const numSamples = Math.floor(len / 2);
+      if (numSamples === 0) return;
+
+      const float32 = new Float32Array(numSamples);
+      for (let i = 0; i < numSamples; i++) {
+        const b1 = binary.charCodeAt(i * 2);
+        const b2 = binary.charCodeAt(i * 2 + 1);
+        let val = (b2 << 8) | b1;
+        if (val >= 0x8000) val -= 0x10000;
+        float32[i] = val / 32768.0;
       }
 
       const audioBuffer = ctx.createBuffer(1, float32.length, 24000);
@@ -127,7 +210,7 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
 
-      // Route through analyser node for waveform visuals
+      // Route through analyser node for waveform visuals and connect to destination
       if (analyserRef.current) {
         source.connect(analyserRef.current);
       } else {
@@ -256,41 +339,96 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
   }, [sessionState, isSpeaking, isListening]);
 
   // Start Live Call
-  const handleStartCall = async () => {
+  const handleStartCall = async (initialPrompt?: string) => {
     setErrorMessage(null);
+    setMicNotice(null);
     setSessionState('connecting');
 
+    // 1. Setup audio playback context on user click gesture
+    let outputCtx: AudioContext;
     try {
-      // 1. Request microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          channelCount: 1,
-          sampleRate: 16000,
-          echoCancellation: true,
-          noiseSuppression: true,
-        }
-      });
-      mediaStreamRef.current = stream;
-
-      // 2. Setup audio capture context (16kHz for Gemini input)
-      const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({
-        sampleRate: 16000,
-      });
-      inputAudioCtxRef.current = inputCtx;
-
-      // 3. Setup playback context (24kHz for Gemini output)
-      const outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({
+      outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({
         sampleRate: 24000,
       });
-      outputAudioCtxRef.current = outputCtx;
-      analyserRef.current = outputCtx.createAnalyser();
-      analyserRef.current.fftSize = 64;
-      analyserRef.current.connect(outputCtx.destination);
-      nextStartTimeRef.current = outputCtx.currentTime;
+    } catch (e) {
+      outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
 
-      // 4. Connect WebSocket to backend /live-voice
+    if (outputCtx.state === 'suspended') {
+      try {
+        await outputCtx.resume();
+      } catch (e) {}
+    }
+
+    outputAudioCtxRef.current = outputCtx;
+    analyserRef.current = outputCtx.createAnalyser();
+    analyserRef.current.fftSize = 64;
+    analyserRef.current.connect(outputCtx.destination);
+    nextStartTimeRef.current = outputCtx.currentTime;
+
+    // 2. Request microphone access with fallback
+    let stream: MediaStream | null = null;
+    let inputCtx: AudioContext | null = null;
+    let micOk = false;
+    let micErrorReason = '';
+
+    try {
+      if (navigator && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+            }
+          });
+          micOk = true;
+        } catch (e1: any) {
+          micErrorReason = e1?.name || e1?.message || 'Permission denied';
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            micOk = true;
+          } catch (e2: any) {
+            micErrorReason = e2?.name || e2?.message || 'Permission denied';
+            console.warn('Microphone permission denied or device not found:', e2);
+          }
+        }
+      } else {
+        micErrorReason = 'Browser mediaDevices API unavailable';
+      }
+    } catch (micErr: any) {
+      micErrorReason = micErr?.name || micErr?.message || 'Microphone error';
+      console.warn('Microphone capture error:', micErr);
+    }
+
+    if (stream && micOk) {
+      mediaStreamRef.current = stream;
+      setHasActiveMic(true);
+      setMicNotice(null);
+      try {
+        inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        if (inputCtx.state === 'suspended') {
+          await inputCtx.resume();
+        }
+        inputAudioCtxRef.current = inputCtx;
+      } catch (e) {
+        console.warn('Failed creating input AudioContext:', e);
+      }
+    } else {
+      setHasActiveMic(false);
+      setMicNotice(
+        micErrorReason.toLowerCase().includes('notallowed') || micErrorReason.toLowerCase().includes('permission')
+          ? 'Browser microphone permission is blocked. Click the lock/settings icon 🔒 in your browser URL address bar to Allow microphone, or open in a direct tab.'
+          : 'Microphone is unavailable or blocked in this browser window. You can click "Allow / Retry Microphone" below or open in a dedicated tab.'
+      );
+    }
+
+    // 3. Connect WebSocket to backend /live-voice
+    try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/live-voice?voice=${selectedVoice}&role=${selectedRole}`;
+      let wsUrl = `${protocol}//${window.location.host}/live-voice?voice=${selectedVoice}&role=${selectedRole}`;
+      if (includeDocumentContext && currentAnalysis) {
+        wsUrl += `&docTitle=${encodeURIComponent(currentAnalysis.documentTitle || '')}&docRisk=${encodeURIComponent(currentAnalysis.riskScore || '')}&docType=${encodeURIComponent(currentAnalysis.documentType || '')}`;
+      }
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -298,43 +436,133 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
         console.log('Connected to Live API WebSocket');
         setSessionState('active');
 
-        // If contract context is toggled, send initial priming text
-        if (includeDocumentContext && currentAnalysis) {
-          const summarySnippet = `Contract: "${currentAnalysis.documentTitle}" (${currentAnalysis.documentType}, Risk: ${currentAnalysis.riskScore}/100). Summary: ${currentAnalysis.summary.slice(0, 500)}`;
+        // If an initial prompt was requested, send it immediately
+        if (initialPrompt && initialPrompt.trim()) {
+          setTranscripts(prev => [
+            ...prev,
+            {
+              id: `user-${Date.now()}`,
+              sender: 'user',
+              text: initialPrompt.trim(),
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              isStreaming: false,
+            }
+          ]);
           ws.send(JSON.stringify({
             type: 'text',
-            text: `[SYSTEM NOTICE]: The user is currently viewing the following agreement in ClarifyLegal. Use this to inform your answers when asked about their document: ${summarySnippet}`
+            text: initialPrompt.trim()
           }));
         }
 
-        // Setup microphone processor
-        const source = inputCtx.createMediaStreamSource(stream);
-        const processor = inputCtx.createScriptProcessor(4096, 1, 1);
-        scriptProcessorRef.current = processor;
+        // Setup microphone processor if mic is available
+        if (stream && inputCtx) {
+          try {
+            const source = inputCtx.createMediaStreamSource(stream);
+            const processor = inputCtx.createScriptProcessor(4096, 1, 1);
+            scriptProcessorRef.current = processor;
 
-        processor.onaudioprocess = (e) => {
-          if (isMicMutedRef.current) return;
-          if (ws.readyState !== WebSocket.OPEN) return;
+            processor.onaudioprocess = (e) => {
+              if (isMicMutedRef.current) {
+                setMicLevel(0);
+                return;
+              }
+              if (ws.readyState !== WebSocket.OPEN) return;
 
-          const channelData = e.inputBuffer.getChannelData(0);
-          
-          // Detect if user is speaking based on amplitude
-          let sum = 0;
-          for (let i = 0; i < channelData.length; i++) {
-            sum += Math.abs(channelData[i]);
+              const channelData = e.inputBuffer.getChannelData(0);
+              
+              // Calculate real-time RMS audio level for visual mic meter
+              let sumSquares = 0;
+              for (let i = 0; i < channelData.length; i++) {
+                sumSquares += channelData[i] * channelData[i];
+              }
+              const rms = Math.sqrt(sumSquares / channelData.length);
+              const level = Math.min(100, Math.round(rms * 450));
+              setMicLevel(level);
+              setIsListening(rms > 0.0035);
+
+              const base64Pcm = pcmToBase64(channelData, inputCtx!.sampleRate);
+              ws.send(JSON.stringify({
+                type: 'audio',
+                audio: base64Pcm,
+              }));
+            };
+
+            // Use silent gain to avoid echo feedback loop that triggers OS noise suppression
+            const muteGain = inputCtx.createGain();
+            muteGain.gain.value = 0;
+            source.connect(processor);
+            processor.connect(muteGain);
+            muteGain.connect(inputCtx.destination);
+          } catch (procErr) {
+            console.warn('ScriptProcessor setup warning:', procErr);
           }
-          const avg = sum / channelData.length;
-          setIsListening(avg > 0.015);
+        }
 
-          const base64Pcm = pcmToBase64(channelData);
-          ws.send(JSON.stringify({
-            type: 'audio',
-            audio: base64Pcm,
-          }));
-        };
+        // Initialize Speech Recognition for immediate transcription & vocal feedback
+        const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (SpeechRecognitionClass) {
+          try {
+            const recognition = new SpeechRecognitionClass();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = speechLanguage;
 
-        source.connect(processor);
-        processor.connect(inputCtx.destination);
+            recognition.onresult = (event: any) => {
+              let interim = '';
+              let finalChunk = '';
+
+              for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                  finalChunk += event.results[i][0].transcript;
+                } else {
+                  interim += event.results[i][0].transcript;
+                }
+              }
+
+              const speechText = (finalChunk || interim).trim();
+              if (speechText) {
+                currentInterimRef.current = speechText;
+                setInterimText(speechText);
+                setIsListening(true);
+
+                // Auto-commit on 1.2 seconds of silence
+                if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+                silenceTimerRef.current = setTimeout(() => {
+                  if (currentInterimRef.current.trim() && sessionStateRef.current === 'active') {
+                    sendSpokenQuery(currentInterimRef.current.trim());
+                  }
+                }, 1200);
+              }
+
+              if (finalChunk && finalChunk.trim()) {
+                if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+                sendSpokenQuery(finalChunk.trim());
+              }
+            };
+
+            recognition.onerror = (errEvent: any) => {
+              console.warn('SpeechRecognition warning:', errEvent.error);
+              if (errEvent.error === 'not-allowed') {
+                setHasActiveMic(false);
+                setMicNotice('Browser microphone permission is blocked. Click the lock icon 🔒 in your address bar to Allow microphone, or click "Open in Direct Tab" below.');
+              }
+            };
+
+            recognition.onend = () => {
+              // Auto-restart recognition while the live call is active
+              if (sessionStateRef.current === 'active' && !isMicMutedRef.current) {
+                try {
+                  recognition.start();
+                } catch (e) {}
+              }
+            };
+
+            recognition.start();
+            recognitionRef.current = recognition;
+          } catch (speechErr) {
+            console.warn('SpeechRecognition not initialized:', speechErr);
+          }
+        }
       };
 
       ws.onmessage = (event) => {
@@ -348,27 +576,37 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
           } else if (msg.type === 'model_transcript' && msg.text) {
             setTranscripts(prev => {
               const last = prev[prev.length - 1];
-              if (last && last.sender === 'model') {
-                return [...prev.slice(0, -1), { ...last, text: last.text + ' ' + msg.text }];
+              if (last && last.sender === 'model' && last.isStreaming) {
+                return [...prev.slice(0, -1), { ...last, text: last.text + msg.text }];
               }
               return [...prev, {
                 id: `model-${Date.now()}`,
                 sender: 'model',
                 text: msg.text,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                isStreaming: true,
               }];
+            });
+          } else if (msg.type === 'turn_complete') {
+            setTranscripts(prev => {
+              const last = prev[prev.length - 1];
+              if (last && last.sender === 'model') {
+                return [...prev.slice(0, -1), { ...last, isStreaming: false }];
+              }
+              return prev;
             });
           } else if (msg.type === 'user_transcript' && msg.text) {
             setTranscripts(prev => {
               const last = prev[prev.length - 1];
-              if (last && last.sender === 'user') {
+              if (last && last.sender === 'user' && last.isStreaming) {
                 return [...prev.slice(0, -1), { ...last, text: last.text + ' ' + msg.text }];
               }
               return [...prev, {
                 id: `user-${Date.now()}`,
                 sender: 'user',
                 text: msg.text,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                isStreaming: true,
               }];
             });
           } else if (msg.type === 'error') {
@@ -382,7 +620,7 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
 
       ws.onerror = (err) => {
         console.error('Live WebSocket error:', err);
-        setErrorMessage('WebSocket connection failed. Please ensure the backend is running and Gemini API key is valid.');
+        setErrorMessage('WebSocket connection failed. Ensure your internet connection is active and try again.');
         setSessionState('error');
       };
 
@@ -392,9 +630,63 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
       };
     } catch (err: any) {
       console.error('Error initiating live call:', err);
-      setErrorMessage(err.message || 'Microphone access denied or audio initialization failed.');
+      setErrorMessage(err.message || 'Live call initialization failed.');
       setSessionState('error');
       handleEndCall();
+    }
+  };
+
+  // Send a custom text question to the Live voice session
+  const handleSendLivePrompt = (text: string) => {
+    if (!text.trim()) return;
+
+    if (outputAudioCtxRef.current && outputAudioCtxRef.current.state === 'suspended') {
+      outputAudioCtxRef.current.resume().catch(() => {});
+    }
+
+    if (sessionState === 'active' && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      setTranscripts(prev => [
+        ...prev,
+        {
+          id: `user-${Date.now()}`,
+          sender: 'user',
+          text: text.trim(),
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          isStreaming: false,
+        }
+      ]);
+      wsRef.current.send(JSON.stringify({
+        type: 'text',
+        text: text.trim()
+      }));
+      setCustomSpokenPrompt('');
+    } else {
+      // Auto start call and send prompt
+      handleStartCall(text.trim());
+      setCustomSpokenPrompt('');
+    }
+  };
+
+  // Explicitly prompt and activate microphone permission
+  const requestMicPermission = async () => {
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (s) {
+        s.getTracks().forEach(t => t.stop());
+        setHasActiveMic(true);
+        setMicNotice(null);
+        if (sessionState === 'active') {
+          handleEndCall();
+          setTimeout(() => handleStartCall(), 300);
+        } else {
+          handleStartCall();
+        }
+      }
+    } catch (err: any) {
+      console.warn('Manual microphone permission request failed:', err);
+      setMicNotice(
+        'Permission request was blocked. Please click the Lock icon 🔒 next to the URL in your browser address bar, choose "Allow" for Microphone, and click Retry.'
+      );
     }
   };
 
@@ -419,6 +711,16 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
       scriptProcessorRef.current.disconnect();
       scriptProcessorRef.current = null;
     }
+
+    // Stop Speech Recognition
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+      } catch (e) {}
+      recognitionRef.current = null;
+    }
+    setInterimText('');
+    setMicLevel(0);
 
     // Close Audio Contexts
     if (inputAudioCtxRef.current && inputAudioCtxRef.current.state !== 'closed') {
@@ -480,7 +782,7 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
   ];
 
   return (
-    <div className="flex flex-col h-[calc(100vh-5rem)] max-w-6xl mx-auto px-4 py-4 space-y-4">
+    <div className="flex flex-col min-h-screen max-w-6xl mx-auto px-4 py-4 space-y-4 pb-16">
       {/* Header Banner */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -586,9 +888,9 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
       </div>
 
       {/* Main Interactive Call Stage */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1 min-h-[520px]">
         {/* Left Stage: Voice Hub & Visualizer (5 columns) */}
-        <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-6 flex flex-col items-center justify-between shadow-xs relative overflow-hidden">
+        <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-col items-center shadow-xs relative space-y-3">
           {/* Ambient background glow */}
           <div className={`absolute -top-24 -left-24 w-72 h-72 rounded-full blur-3xl pointer-events-none transition-opacity duration-700 ${
             sessionState === 'active' 
@@ -597,7 +899,7 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
           }`} />
 
           {/* Status Indicator */}
-          <div className="w-full flex items-center justify-between text-xs z-10">
+          <div className="w-full flex items-center justify-between text-xs z-10 pb-2 border-b border-slate-100">
             <div className="flex items-center space-x-2">
               <span className={`w-2.5 h-2.5 rounded-full ${
                 sessionState === 'active'
@@ -610,21 +912,58 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
                   : sessionState === 'connecting' ? 'Connecting to Live API...' : 'Ready to Connect'}
               </span>
             </div>
-            <span className="text-[11px] font-mono text-slate-500 font-medium">
+            <span className="text-[11px] font-mono text-slate-500 font-medium bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200">
               {selectedVoice} • {selectedRole}
             </span>
           </div>
 
-          {/* Center Call Sphere / Visualizer */}
-          <div className="flex flex-col items-center justify-center my-auto py-6 z-10">
-            {/* Dynamic Waveform Rings */}
-            <div className="relative flex items-center justify-center">
+          {/* Spoken Language Selector */}
+          <div className="w-full z-10 flex flex-col space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-600 tracking-wider">Language Preference:</span>
+            <div className="flex items-center justify-between bg-slate-100 p-1 rounded-xl text-xs gap-1">
+              <button
+                type="button"
+                onClick={() => setSpeechLanguage('hi-IN')}
+                className={`flex-1 py-1.5 px-2 rounded-lg font-medium transition-colors cursor-pointer text-center ${
+                  speechLanguage === 'hi-IN' ? 'bg-white text-teal-700 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Speak in Hindi or Hinglish"
+              >
+                🇮🇳 Hindi / Hinglish
+              </button>
+              <button
+                type="button"
+                onClick={() => setSpeechLanguage('en-IN')}
+                className={`flex-1 py-1.5 px-2 rounded-lg font-medium transition-colors cursor-pointer text-center ${
+                  speechLanguage === 'en-IN' ? 'bg-white text-teal-700 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Speak in Indian English"
+              >
+                English (India)
+              </button>
+              <button
+                type="button"
+                onClick={() => setSpeechLanguage('en-US')}
+                className={`flex-1 py-1.5 px-2 rounded-lg font-medium transition-colors cursor-pointer text-center ${
+                  speechLanguage === 'en-US' ? 'bg-white text-teal-700 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Speak in US English"
+              >
+                English (US)
+              </button>
+            </div>
+          </div>
+
+          {/* Center Call Sphere & Visualizer */}
+          <div className="flex flex-col items-center justify-center w-full py-2 z-10 space-y-3">
+            {/* Dynamic Waveform Rings & Main Sphere */}
+            <div className="relative flex items-center justify-center my-1">
               {sessionState === 'active' && (
                 <>
-                  <div className={`absolute w-44 h-44 rounded-full border border-teal-300 transition-all duration-500 ${
+                  <div className={`absolute w-36 h-36 rounded-full border border-teal-300 transition-all duration-500 ${
                     isSpeaking ? 'scale-125 opacity-80 animate-ping' : isListening ? 'scale-110 opacity-60' : 'scale-100 opacity-20'
                   }`} />
-                  <div className={`absolute w-36 h-36 rounded-full border border-indigo-300 transition-all duration-300 ${
+                  <div className={`absolute w-28 h-28 rounded-full border border-indigo-300 transition-all duration-300 ${
                     isSpeaking ? 'scale-110 opacity-90' : 'scale-95 opacity-30'
                   }`} />
                 </>
@@ -632,9 +971,9 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
 
               {/* Main Call Action Circle */}
               <button
-                onClick={sessionState === 'active' ? handleEndCall : handleStartCall}
+                onClick={sessionState === 'active' ? () => handleEndCall() : () => handleStartCall()}
                 disabled={sessionState === 'connecting'}
-                className={`relative w-28 h-28 rounded-full flex flex-col items-center justify-center shadow-md transition-all duration-300 transform active:scale-95 cursor-pointer ${
+                className={`relative w-22 h-22 rounded-full flex flex-col items-center justify-center shadow-md transition-all duration-300 transform active:scale-95 cursor-pointer ${
                   sessionState === 'active'
                     ? 'bg-rose-600 text-white hover:bg-rose-500 shadow-rose-200'
                     : 'bg-teal-600 text-white hover:bg-teal-700 shadow-teal-200'
@@ -642,12 +981,12 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
               >
                 {sessionState === 'active' ? (
                   <>
-                    <PhoneOff className="w-9 h-9 mb-1" />
+                    <PhoneOff className="w-7 h-7 mb-0.5" />
                     <span className="text-[10px] font-bold tracking-wider uppercase">End Call</span>
                   </>
                 ) : (
                   <>
-                    <PhoneCall className="w-9 h-9 mb-1" />
+                    <PhoneCall className="w-7 h-7 mb-0.5" />
                     <span className="text-[10px] font-bold tracking-wider uppercase">
                       {sessionState === 'connecting' ? 'Starting...' : 'Start Call'}
                     </span>
@@ -656,56 +995,169 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
               </button>
             </div>
 
+            {/* In-Call Action Toolbar (Visible directly under Call Button) */}
+            {sessionState === 'active' && (
+              <div className="flex items-center justify-center gap-2 pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setIsMicMuted(!isMicMuted)}
+                  className={`px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                    isMicMuted
+                      ? 'bg-amber-100 text-amber-900 border-amber-300 shadow-xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                  }`}
+                  title={isMicMuted ? 'Unmute microphone' : 'Mute microphone'}
+                >
+                  {isMicMuted ? <MicOff className="w-3.5 h-3.5 text-amber-700" /> : <Mic className="w-3.5 h-3.5 text-emerald-600" />}
+                  <span>{isMicMuted ? 'Unmute Mic' : 'Mute Mic'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={interruptPlayback}
+                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer shadow-xs"
+                  title="Interrupt AI speaking immediately"
+                >
+                  <VolumeX className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Interrupt AI</span>
+                </button>
+              </div>
+            )}
+
             {/* Audio Waveform Canvas */}
-            <div className="mt-8 w-64 h-12 bg-slate-50 rounded-xl border border-slate-200 p-1 flex items-center justify-center shadow-inner">
-              <canvas ref={canvasRef} width={240} height={40} className="w-full h-full" />
+            <div className="w-full max-w-[260px] h-9 bg-slate-50 rounded-xl border border-slate-200 p-1 flex items-center justify-center shadow-inner">
+              <canvas ref={canvasRef} width={240} height={32} className="w-full h-full" />
             </div>
+
+            {/* Live Mic Audio Input Level Meter */}
+            {sessionState === 'active' && hasActiveMic && (
+              <div className="w-full max-w-[260px] flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/90 shadow-2xs">
+                <Mic className={`w-3.5 h-3.5 ${micLevel > 12 ? 'text-emerald-500 animate-pulse' : 'text-slate-400'}`} />
+                <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full transition-all duration-75 rounded-full ${
+                      micLevel > 12 ? 'bg-emerald-500' : 'bg-slate-400'
+                    }`}
+                    style={{ width: `${Math.min(100, micLevel * 2.2)}%` }}
+                  />
+                </div>
+                <span className="text-[10px] font-mono font-medium text-slate-500 w-14 text-right">
+                  {micLevel > 12 ? 'Speaking' : 'Listening'}
+                </span>
+              </div>
+            )}
           </div>
 
-          {/* Bottom In-Call Controls */}
-          <div className="w-full z-10 pt-4 border-t border-slate-100">
+          {/* Live Hearing Box with Instant Send */}
+          {interimText && (
+            <div className="w-full z-10 p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-950 text-xs shadow-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center space-x-1.5 font-semibold text-emerald-800">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                  <span>Hearing You Speak:</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => sendSpokenQuery(interimText)}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center space-x-1 cursor-pointer transition-colors shadow-xs"
+                >
+                  <span>Send Now ➔</span>
+                </button>
+              </div>
+              <p className="font-medium italic text-xs bg-white/80 p-2 rounded-lg border border-emerald-200 leading-snug">
+                &ldquo;{interimText}&rdquo;
+              </p>
+              <p className="text-[10px] text-emerald-700 font-medium">
+                Tip: Pause for 1 second or tap &ldquo;Send Now&rdquo; to hear Gemini speak back.
+              </p>
+            </div>
+          )}
+
+          {/* Direct In-Stage Voice/Text Question Bar */}
+          <div className="w-full z-10 pt-2 border-t border-slate-100">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendLivePrompt(customSpokenPrompt);
+              }}
+              className="flex items-center gap-1.5"
+            >
+              <input
+                type="text"
+                value={customSpokenPrompt}
+                onChange={(e) => setCustomSpokenPrompt(e.target.value)}
+                placeholder="Ask ClarifyLegal voice directly (e.g. Hindi or English)..."
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
+              />
+              <button
+                type="submit"
+                disabled={!customSpokenPrompt.trim() || sessionState === 'connecting'}
+                className="px-3 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white font-semibold text-xs transition-colors flex items-center space-x-1 cursor-pointer shadow-xs flex-shrink-0"
+              >
+                <span>Ask Voice</span>
+              </button>
+            </form>
+          </div>
+
+          {/* Warnings & Diagnostics */}
+          <div className="w-full z-10 space-y-2">
             {errorMessage && (
-              <div className="mb-3 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center space-x-2">
+              <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center space-x-2">
                 <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
                 <span>{errorMessage}</span>
               </div>
             )}
 
-            <div className="flex items-center justify-center space-x-4">
-              <button
-                disabled={sessionState !== 'active'}
-                onClick={() => setIsMicMuted(!isMicMuted)}
-                className={`p-3 rounded-full border transition-all cursor-pointer ${
-                  isMicMuted
-                    ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-sm'
-                    : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
-                } disabled:opacity-40 disabled:cursor-not-allowed`}
-                title={isMicMuted ? 'Unmute microphone' : 'Mute microphone'}
-              >
-                {isMicMuted ? <MicOff className="w-5 h-5 text-amber-700" /> : <Mic className="w-5 h-5 text-emerald-600" />}
-              </button>
+            {micNotice && (
+              <div className="p-3 rounded-xl bg-amber-50/95 border border-amber-200 text-xs text-amber-900 shadow-xs space-y-2">
+                <div className="flex items-start space-x-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 space-y-1.5">
+                    <p className="font-semibold text-amber-950 text-xs">Microphone Permission Notice</p>
+                    <p className="text-[11px] leading-relaxed text-amber-800">
+                      {micNotice}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={requestMicPermission}
+                        className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer shadow-xs"
+                      >
+                        <Mic className="w-3.5 h-3.5" />
+                        <span>Allow / Retry Microphone</span>
+                      </button>
 
-              <button
-                disabled={sessionState !== 'active'}
-                onClick={interruptPlayback}
-                className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1.5 cursor-pointer shadow-xs"
-                title="Interrupt AI speaking immediately"
-              >
-                <VolumeX className="w-4 h-4 text-slate-500" />
-                <span>Interrupt AI</span>
-              </button>
-            </div>
+                      <a
+                        href={window.location.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-[11px] font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer shadow-2xs"
+                        title="Opens app in clean browser tab where microphone popup can trigger directly"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Open in Direct Tab</span>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
-            <p className="text-center text-[11px] text-slate-500 mt-3">
-              {sessionState === 'active' 
-                ? (isMicMuted ? 'Microphone muted. Tap mic icon to speak.' : 'Speak naturally into your microphone. Gemini responds in real-time.')
-                : 'Supports Chrome, Firefox, Safari, Edge with microphone permissions.'}
-            </p>
+            {/* Microphone Active Indicator */}
+            {sessionState === 'active' && hasActiveMic && !micNotice && (
+              <div className="p-2 rounded-xl bg-emerald-50/80 border border-emerald-200 text-[11px] text-emerald-800 flex items-center justify-between">
+                <span className="flex items-center space-x-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="font-semibold">Microphone active & streaming</span>
+                </span>
+                <span className="text-[10px] text-emerald-600 font-mono">16kHz PCM</span>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Right Stage: Real-Time Live Transcripts & Prompt Inspirations (7 columns) */}
-        <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-5 flex flex-col shadow-xs min-h-0">
+        <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-5 flex flex-col shadow-xs min-h-[500px]">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
             <div className="flex items-center space-x-2">
               <Activity className="w-4 h-4 text-teal-600" />
@@ -773,20 +1225,47 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
             <div ref={transcriptEndRef} />
           </div>
 
-          {/* Quick Voice Conversation Starters */}
-          <div className="pt-3 border-t border-slate-100 mt-3">
-            <p className="text-[11px] font-semibold text-slate-600 mb-2 flex items-center space-x-1.5">
+          {/* Spoken Text Query Bar */}
+          <div className="pt-2 border-t border-slate-100 mt-2">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendLivePrompt(customSpokenPrompt);
+              }}
+              className="flex items-center gap-2 mb-2"
+            >
+              <input
+                type="text"
+                value={customSpokenPrompt}
+                onChange={(e) => setCustomSpokenPrompt(e.target.value)}
+                placeholder="Type a question to hear Gemini 3.8 Live speak back..."
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-colors"
+              />
+              <button
+                type="submit"
+                disabled={!customSpokenPrompt.trim() || sessionState === 'connecting'}
+                className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white font-semibold text-xs transition-colors flex items-center space-x-1 cursor-pointer shadow-xs"
+              >
+                <span>Ask Spoken</span>
+              </button>
+            </form>
+
+            {/* Quick Voice Conversation Starters */}
+            <p className="text-[11px] font-semibold text-slate-600 mb-1.5 flex items-center space-x-1.5">
               <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-              <span>Suggested topics to ask aloud during your call:</span>
+              <span>1-Click Spoken Quick-Topics (Tap to hear live voice answer):</span>
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
               {voicePrompts.map((promptText, i) => (
-                <div
+                <button
                   key={i}
-                  className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[11px] text-slate-700 hover:border-teal-400 hover:bg-teal-50/40 transition-colors"
+                  type="button"
+                  onClick={() => handleSendLivePrompt(promptText)}
+                  className="text-left bg-slate-50 border border-slate-200 hover:border-teal-500 hover:bg-teal-50/50 rounded-xl px-3 py-2 text-[11px] text-slate-700 transition-all flex items-center justify-between group cursor-pointer shadow-2xs"
                 >
-                  {promptText}
-                </div>
+                  <span className="line-clamp-2 pr-2">{promptText}</span>
+                  <Volume2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-teal-600 flex-shrink-0 transition-colors" />
+                </button>
               ))}
             </div>
           </div>

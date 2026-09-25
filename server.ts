@@ -4,12 +4,35 @@ import path from "path";
 import { WebSocketServer, WebSocket } from "ws";
 import { GoogleGenAI, Modality, type LiveServerMessage } from "@google/genai";
 import dotenv from "dotenv";
+import { sanitizeContractInput, sanitizeUserMessage, checkRateLimit } from "./src/services/securityGuardrails";
 
 dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
 const PORT = 3000;
+
+// Security Headers Middleware
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  next();
+});
+
+// API Rate Limiting Middleware
+app.use("/api", (req, res, next) => {
+  const clientIp = req.ip || req.headers["x-forwarded-for"]?.toString() || "127.0.0.1";
+  const rateStatus = checkRateLimit(clientIp);
+  if (!rateStatus.allowed) {
+    return res.status(429).json({
+      error: "Rate limit exceeded. Too many requests. Please slow down.",
+    });
+  }
+  res.setHeader("X-RateLimit-Remaining", rateStatus.remaining.toString());
+  next();
+});
 
 app.use(express.json({ limit: "10mb" }));
 
@@ -1261,21 +1284,28 @@ wss.on("connection", async (clientWs: WebSocket, req: http.IncomingMessage) => {
     return;
   }
 
-  // Parse voice and role from query
+  // Parse voice, role, and active contract context from query
   let voiceName = "Zephyr";
   let role = "advisor";
+  let documentContextNotice = "";
   try {
     const host = req.headers.host || "localhost:3000";
     const parsedUrl = new URL(req.url || "", `http://${host}`);
     voiceName = parsedUrl.searchParams.get("voice") || "Zephyr";
     role = parsedUrl.searchParams.get("role") || "advisor";
+    const docTitle = parsedUrl.searchParams.get("docTitle");
+    const docRisk = parsedUrl.searchParams.get("docRisk");
+    const docType = parsedUrl.searchParams.get("docType");
+    if (docTitle) {
+      documentContextNotice = `\nActive Document Context: The user is currently examining "${docTitle}" (${docType || "Legal Agreement"}, Risk Score: ${docRisk || "N/A"}/100). Keep your legal insights tailored to this context whenever asked.`;
+    }
   } catch (e) {}
 
-  let systemInstruction = "You are ClarifyLegal Voice Assistant, an approachable, highly knowledgeable legal document advisor and negotiation strategist. You speak clearly and naturally to help users understand confusing legal clauses, lease terms, contractor rights, and negotiation tactics. Keep answers conversational, direct, and under 3 to 4 sentences unless asked for details.";
+  let systemInstruction = "You are ClarifyLegal Voice Assistant, an approachable, highly knowledgeable legal document advisor and negotiation strategist. You speak clearly, naturally, and warmly to help users understand confusing legal clauses, lease terms, contractor rights, and negotiation tactics. Keep answers conversational, direct, and under 2 to 3 sentences unless asked for details." + documentContextNotice;
   if (role === "negotiator") {
-    systemInstruction = "You are a pragmatic, tough corporate counterparty and negotiation sparring partner. In this voice roleplay, you push back realistically on tenant or contractor requests while remaining professional, and then offer constructive advice when asked. Speak naturally and concisely.";
+    systemInstruction = "You are a pragmatic, tough corporate counterparty and negotiation sparring partner. In this voice roleplay, you push back realistically on tenant or contractor requests while remaining professional, and then offer constructive advice when asked. Speak naturally and concisely." + documentContextNotice;
   } else if (role === "simplifier") {
-    systemInstruction = "You are a friendly legal translator who explains dense legal concepts in plain, 5th-grade English. Speak warmly and clearly, avoiding legal jargon.";
+    systemInstruction = "You are a friendly legal translator who explains dense legal concepts in plain, 5th-grade English. Speak warmly and clearly, avoiding legal jargon." + documentContextNotice;
   }
 
   const ai = new GoogleGenAI({
@@ -1322,9 +1352,10 @@ wss.on("connection", async (clientWs: WebSocket, req: http.IncomingMessage) => {
             }
           }
 
-          // Audio transcriptions if provided
-          // @ts-ignore
-          const outputTranscript = message.serverContent?.outputAudioTranscription?.text;
+          // Audio transcriptions from Gemini Live (Google returns outputTranscription)
+          const outputTranscript = 
+            (message.serverContent as any)?.outputTranscription?.text ||
+            (message.serverContent as any)?.outputAudioTranscription?.text;
           if (outputTranscript) {
             clientWs.send(JSON.stringify({
               type: "model_transcript",
@@ -1332,8 +1363,9 @@ wss.on("connection", async (clientWs: WebSocket, req: http.IncomingMessage) => {
             }));
           }
 
-          // @ts-ignore
-          const inputTranscript = message.serverContent?.inputAudioTranscription?.text;
+          const inputTranscript = 
+            (message.serverContent as any)?.inputTranscription?.text ||
+            (message.serverContent as any)?.inputAudioTranscription?.text;
           if (inputTranscript) {
             clientWs.send(JSON.stringify({
               type: "user_transcript",
@@ -1369,6 +1401,21 @@ wss.on("connection", async (clientWs: WebSocket, req: http.IncomingMessage) => {
       voice: voiceName,
       role
     }));
+
+    // Trigger an immediate welcome spoken greeting from Gemini Live
+    try {
+      session.sendClientContent({
+        turns: [
+          {
+            role: "user",
+            parts: [{ text: "Hello! In one brief, warm sentence, introduce yourself as ClarifyLegal Voice and ask how you can help clarify or negotiate the agreement today." }]
+          }
+        ],
+        turnComplete: true
+      });
+    } catch (greetErr) {
+      console.warn("Initial greeting trigger warning:", greetErr);
+    }
   } catch (err: any) {
     console.error("Failed to connect to Live API:", err);
     if (clientWs.readyState === WebSocket.OPEN) {
@@ -1383,14 +1430,22 @@ wss.on("connection", async (clientWs: WebSocket, req: http.IncomingMessage) => {
       const msg = JSON.parse(data.toString());
       if (msg.type === "audio" && msg.audio && session) {
         session.sendRealtimeInput({
-          audio: {
-            data: msg.audio,
-            mimeType: "audio/pcm;rate=16000"
-          }
+          media: [
+            {
+              data: msg.audio,
+              mimeType: "audio/pcm;rate=16000"
+            }
+          ]
         });
       } else if (msg.type === "text" && msg.text && session) {
-        session.sendRealtimeInput({
-          text: msg.text
+        session.sendClientContent({
+          turns: [
+            {
+              role: "user",
+              parts: [{ text: msg.text }]
+            }
+          ],
+          turnComplete: true
         });
       }
     } catch (err) {

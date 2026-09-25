@@ -169,4 +169,5 @@ export interface LiveVoiceTranscriptItem {
   sender: 'user' | 'model';
   text: string;
   timestamp: string;
+  isStreaming?: boolean;
 }
