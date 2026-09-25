@@ -1,18 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { LandingNavbar } from './components/LandingNavbar';
 import { WorkspaceSidebar } from './components/WorkspaceSidebar';
 import { WorkspaceHeader } from './components/WorkspaceHeader';
 import { LegalDisclaimerModal } from './components/LegalDisclaimerModal';
 import { LandingPage } from './components/LandingPage';
 import { AuthModal } from './components/AuthModal';
-import { DashboardHub } from './components/DashboardHub';
-import { DocumentAnalyzer } from './components/DocumentAnalyzer';
-import { DocumentCompare } from './components/DocumentCompare';
-import { JargonDecoder } from './components/JargonDecoder';
-import { ActionPlaybook } from './components/ActionPlaybook';
-import { LegalNavigator } from './components/LegalNavigator';
-import { GeminiChatbot } from './components/GeminiChatbot';
-import { VoiceLiveAssistant } from './components/VoiceLiveAssistant';
+
+// High-Efficiency Code-Splitting with Dynamic Lazy Loading
+const DashboardHub = lazy(() => import('./components/DashboardHub').then(m => ({ default: m.DashboardHub })));
+const DocumentAnalyzer = lazy(() => import('./components/DocumentAnalyzer').then(m => ({ default: m.DocumentAnalyzer })));
+const DocumentCompare = lazy(() => import('./components/DocumentCompare').then(m => ({ default: m.DocumentCompare })));
+const JargonDecoder = lazy(() => import('./components/JargonDecoder').then(m => ({ default: m.JargonDecoder })));
+const ActionPlaybook = lazy(() => import('./components/ActionPlaybook').then(m => ({ default: m.ActionPlaybook })));
+const LegalNavigator = lazy(() => import('./components/LegalNavigator').then(m => ({ default: m.LegalNavigator })));
+const GeminiChatbot = lazy(() => import('./components/GeminiChatbot').then(m => ({ default: m.GeminiChatbot })));
+const VoiceLiveAssistant = lazy(() => import('./components/VoiceLiveAssistant').then(m => ({ default: m.VoiceLiveAssistant })));
 import { 
   ActiveTab, 
   AuthUser,
@@ -317,6 +319,14 @@ export default function App() {
   // -------------------------------------------------------------
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex">
+      {/* Accessibility: Skip to Main Content Link */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-indigo-600 focus:text-white focus:rounded-lg focus:shadow-xl focus:outline-none text-xs font-bold"
+      >
+        Skip to main content
+      </a>
+
       {/* Sleek Vertical Left Sidebar */}
       <WorkspaceSidebar
         activeTab={activeTab}
@@ -340,12 +350,13 @@ export default function App() {
 
         {/* Error Banner */}
         {errorMessage && (
-          <div className="bg-rose-50 border-b border-rose-200 text-rose-800 px-4 py-3 text-xs flex items-center justify-between">
+          <div className="bg-rose-50 border-b border-rose-200 text-rose-800 px-4 py-3 text-xs flex items-center justify-between" role="alert">
             <div className="max-w-7xl mx-auto w-full flex items-center justify-between">
               <span>{errorMessage}</span>
               <button
                 onClick={() => setErrorMessage(null)}
                 className="text-rose-600 hover:text-rose-900 font-bold ml-4 cursor-pointer"
+                aria-label="Dismiss error notification"
               >
                 Dismiss
               </button>
@@ -353,75 +364,88 @@ export default function App() {
           </div>
         )}
 
-        {/* Main Workspace Router */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
-          {activeTab === 'dashboard' && (
-            <DashboardHub
-              setActiveTab={setActiveTab}
-              onSelectSample={handleSelectSample}
-              recentAnalyses={recentAnalyses}
-              onOpenAnalysis={(item) => {
-                setCurrentAnalysis(item);
-                setActiveTab('analyzer');
-              }}
-            />
-          )}
+        {/* Main Workspace Router with Dynamic Code-Splitting Suspense */}
+        <main 
+          id="main-content" 
+          tabIndex={-1} 
+          role="main" 
+          aria-label="ClarifyLegal Document & Negotiation Workspace"
+          className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto focus:outline-none"
+        >
+          <Suspense fallback={
+            <div className="w-full py-20 flex flex-col items-center justify-center space-y-3" role="status" aria-live="polite">
+              <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+              <span className="text-xs font-semibold text-slate-500">Loading ClarifyLegal workspace view...</span>
+            </div>
+          }>
+            {activeTab === 'dashboard' && (
+              <DashboardHub
+                setActiveTab={setActiveTab}
+                onSelectSample={handleSelectSample}
+                recentAnalyses={recentAnalyses}
+                onOpenAnalysis={(item) => {
+                  setCurrentAnalysis(item);
+                  setActiveTab('analyzer');
+                }}
+              />
+            )}
 
-          {activeTab === 'analyzer' && (
-            <DocumentAnalyzer
-              currentAnalysis={currentAnalysis}
-              onAnalyze={handleAnalyzeContract}
-              isLoading={isAnalyzing}
-              onReset={() => setCurrentAnalysis(null)}
-              onSelectForPlaybook={handleSelectClauseForPlaybook}
-            />
-          )}
+            {activeTab === 'analyzer' && (
+              <DocumentAnalyzer
+                currentAnalysis={currentAnalysis}
+                onAnalyze={handleAnalyzeContract}
+                isLoading={isAnalyzing}
+                onReset={() => setCurrentAnalysis(null)}
+                onSelectForPlaybook={handleSelectClauseForPlaybook}
+              />
+            )}
 
-          {activeTab === 'compare' && (
-            <DocumentCompare
-              currentComparison={currentComparison}
-              onCompare={handleCompareContracts}
-              isLoading={isComparing}
-              onReset={() => setCurrentComparison(null)}
-            />
-          )}
+            {activeTab === 'compare' && (
+              <DocumentCompare
+                currentComparison={currentComparison}
+                onCompare={handleCompareContracts}
+                isLoading={isComparing}
+                onReset={() => setCurrentComparison(null)}
+              />
+            )}
 
-          {activeTab === 'decoder' && (
-            <JargonDecoder onDecodeClause={handleDecodeClause} />
-          )}
+            {activeTab === 'decoder' && (
+              <JargonDecoder onDecodeClause={handleDecodeClause} />
+            )}
 
-          {activeTab === 'playbook' && (
-            <ActionPlaybook
-              currentAnalysis={currentAnalysis}
-              prefilledClause={prefilledPlaybookClause}
-              onClearPrefill={() => setPrefilledPlaybookClause(null)}
-              onGenerateCounterProposal={handleGenerateCounterProposal}
-            />
-          )}
+            {activeTab === 'playbook' && (
+              <ActionPlaybook
+                currentAnalysis={currentAnalysis}
+                prefilledClause={prefilledPlaybookClause}
+                onClearPrefill={() => setPrefilledPlaybookClause(null)}
+                onGenerateCounterProposal={handleGenerateCounterProposal}
+              />
+            )}
 
-          {activeTab === 'chatbot' && (
-            <GeminiChatbot
-              currentAnalysis={currentAnalysis}
-              onNavigateToAnalyzer={() => setActiveTab('analyzer')}
-            />
-          )}
+            {activeTab === 'chatbot' && (
+              <GeminiChatbot
+                currentAnalysis={currentAnalysis}
+                onNavigateToAnalyzer={() => setActiveTab('analyzer')}
+              />
+            )}
 
-          {activeTab === 'voice' && (
-            <VoiceLiveAssistant
-              currentAnalysis={currentAnalysis}
-            />
-          )}
+            {activeTab === 'voice' && (
+              <VoiceLiveAssistant
+                currentAnalysis={currentAnalysis}
+              />
+            )}
 
-          {activeTab === 'navigator' && (
-            <LegalNavigator
-              onAskQuestion={handleAskNavigator}
-              currentDocumentContext={
-                currentAnalysis
-                  ? `Current Document: ${currentAnalysis.documentTitle}\nRisk Score: ${currentAnalysis.riskScore}/100\nSummary: ${currentAnalysis.summary.slice(0, 400)}`
-                  : undefined
-              }
-            />
-          )}
+            {activeTab === 'navigator' && (
+              <LegalNavigator
+                onAskQuestion={handleAskNavigator}
+                currentDocumentContext={
+                  currentAnalysis
+                    ? `Current Document: ${currentAnalysis.documentTitle}\nRisk Score: ${currentAnalysis.riskScore}/100\nSummary: ${currentAnalysis.summary.slice(0, 400)}`
+                    : undefined
+                }
+              />
+            )}
+          </Suspense>
         </main>
 
         {/* Clean Minimalist Workspace Footer */}

@@ -11,6 +11,16 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    test: {
+      globals: true,
+      environment: 'node',
+      coverage: {
+        provider: 'v8',
+        reporter: ['text', 'json', 'html'],
+        include: ['src/**/*.ts'],
+        exclude: ['src/types.ts', 'node_modules/**', 'dist/**'],
+      },
+    },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
@@ -23,16 +33,6 @@ export default defineConfig(() => {
             if (id.includes('node_modules')) {
               if (id.includes('lucide-react')) {
                 return 'vendor-icons';
-              }
-              if (
-                id.includes('react-markdown') ||
-                id.includes('unist') ||
-                id.includes('micromark') ||
-                id.includes('mdast') ||
-                id.includes('vfile') ||
-                id.includes('remark')
-              ) {
-                return 'vendor-markdown';
               }
               return 'vendor-core';
             }

@@ -71,15 +71,29 @@ export function detectPredatoryClauses(text: string): Array<{ name: string; seve
   const findings: Array<{ name: string; severity: "Severe" | "High" | "Medium"; snippet: string }> = [];
   const lower = text.toLowerCase();
 
-  if (lower.includes("indemnif") && (lower.includes("hold harmless") || lower.includes("sole cost and expense") || lower.includes("gross negligence"))) {
+  // 1. Broad-form / uncapped indemnification
+  if (lower.includes("indemnif") && (
+    lower.includes("hold harmless") || 
+    lower.includes("save harmless") || 
+    lower.includes("sole cost") || 
+    lower.includes("gross negligence") ||
+    lower.includes("all liabilities") ||
+    lower.includes("defend and hold")
+  )) {
     findings.push({
-      name: "Uncapped Broad-Form Indemnification",
+      name: "Broad-Form Uncapped Indemnification",
       severity: "Severe",
       snippet: "Contract requires total indemnification without reciprocal limitation of liability.",
     });
   }
 
-  if (lower.includes("automatic") && lower.includes("renew") && (lower.includes("written notice") || lower.includes("subsequent term"))) {
+  // 2. Automatic renewal traps
+  if ((lower.includes("automatic") || lower.includes("automatically")) && lower.includes("renew") && (
+    lower.includes("notice") || 
+    lower.includes("subsequent term") || 
+    lower.includes("months") ||
+    lower.includes("days")
+  )) {
     findings.push({
       name: "Automatic Renewal Trap",
       severity: "High",
@@ -87,6 +101,7 @@ export function detectPredatoryClauses(text: string): Array<{ name: string; seve
     });
   }
 
+  // 3. Unilateral termination
   if (lower.includes("terminate") && (lower.includes("sole discretion") || lower.includes("without cause") || lower.includes("at any time"))) {
     findings.push({
       name: "Unilateral Termination Rights",
@@ -95,11 +110,23 @@ export function detectPredatoryClauses(text: string): Array<{ name: string; seve
     });
   }
 
+  // 4. Dispute waivers
   if (lower.includes("waive") && (lower.includes("jury trial") || lower.includes("class action") || lower.includes("right to claim"))) {
     findings.push({
       name: "Mandatory Jury & Class Action Waiver",
       severity: "Medium",
       snippet: "Forfeits constitutional dispute protections and mandates binding private arbitration.",
+    });
+  }
+
+  // 5. Perpetual IP forfeiture
+  if ((lower.includes("intellectual property") || lower.includes("inventions") || lower.includes("work product")) && (
+    lower.includes("in perpetuity") || lower.includes("perpetual") || lower.includes("irrevocably assign")
+  )) {
+    findings.push({
+      name: "Perpetual Pre-Payment IP Forfeiture",
+      severity: "Severe",
+      snippet: "Transfers title to all background and foreground assets without requiring full payment.",
     });
   }
 

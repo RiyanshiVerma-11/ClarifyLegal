@@ -181,7 +181,7 @@ async function parseDocxFile(file: File): Promise<string> {
 /**
  * Cleans excessive whitespace, null bytes, and non-printable control characters.
  */
-function sanitizeContractText(raw: string): string {
+export function sanitizeContractText(raw: string): string {
   return raw
     .replace(/\0/g, '')
     .replace(/\r\n/g, '\n')

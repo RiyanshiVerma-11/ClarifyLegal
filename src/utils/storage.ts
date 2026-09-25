@@ -66,6 +66,26 @@ export function saveComparison(comparison: DocumentComparisonResult): void {
   }
 }
 
+export function deleteComparison(id: string): DocumentComparisonResult[] {
+  try {
+    const existing = getSavedComparisons();
+    const updated = existing.filter((item) => item.id !== id);
+    localStorage.setItem(RECENT_COMPARISONS_KEY, JSON.stringify(updated));
+    return updated;
+  } catch (e) {
+    console.error('Failed to delete comparison from localStorage', e);
+    return [];
+  }
+}
+
+export function clearSavedComparisons(): void {
+  try {
+    localStorage.removeItem(RECENT_COMPARISONS_KEY);
+  } catch (e) {
+    console.error('Failed to clear comparisons', e);
+  }
+}
+
 export function seedBothLeaseAndContractorAnalyses(): ContractAnalysisResult[] {
   try {
     const lease = getPresetSampleAnalysis('residential-lease');

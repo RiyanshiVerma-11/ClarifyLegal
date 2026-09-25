@@ -1,10 +1,13 @@
 import express from "express";
 import http from "http";
 import path from "path";
+import compression from "compression";
 import { WebSocketServer, WebSocket } from "ws";
 import { GoogleGenAI, Modality, type LiveServerMessage } from "@google/genai";
 import dotenv from "dotenv";
 import { sanitizeContractInput, sanitizeUserMessage, checkRateLimit } from "./src/services/securityGuardrails";
+import { globalCache } from "./src/services/cacheService";
+import { generateAttorneyPrepSheet, formatPrepSheetAsMarkdown } from "./src/services/attorneyPrepService";
 
 dotenv.config();
 
@@ -12,25 +15,32 @@ const app = express();
 const server = http.createServer(app);
 const PORT = 3000;
 
-// Security Headers Middleware
+// High-Efficiency Gzip/Brotli Compression
+app.use(compression());
+
+// Enhanced Security Headers & Privacy Shield
 app.use((_req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("X-XSS-Protection", "1; mode=block");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "microphone=(self)");
   next();
 });
 
-// API Rate Limiting Middleware
+// API Rate Limiting Middleware with RFC compliance
 app.use("/api", (req, res, next) => {
   const clientIp = req.ip || req.headers["x-forwarded-for"]?.toString() || "127.0.0.1";
   const rateStatus = checkRateLimit(clientIp);
+  res.setHeader("X-RateLimit-Limit", "60");
+  res.setHeader("X-RateLimit-Remaining", rateStatus.remaining.toString());
+  res.setHeader("X-RateLimit-Reset", Math.ceil(rateStatus.resetMs / 1000).toString());
   if (!rateStatus.allowed) {
     return res.status(429).json({
       error: "Rate limit exceeded. Too many requests. Please slow down.",
+      retryAfterSeconds: Math.ceil(rateStatus.resetMs / 1000),
     });
   }
-  res.setHeader("X-RateLimit-Remaining", rateStatus.remaining.toString());
   next();
 });
 
@@ -81,26 +91,88 @@ async function generateGenAIContent(
   throw lastError || new Error("All Gemini models were unavailable.");
 }
 
-// Health check endpoint
+// Health & Telemetry check endpoint
 app.get("/api/health", (_req, res) => {
   const hasKey = !!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== "MY_GEMINI_API_KEY";
-  res.json({ status: "ok", genaiConfigured: hasKey });
+  res.json({ 
+    status: "ok", 
+    genaiConfigured: hasKey,
+    cacheStats: globalCache.getStats(),
+    securityFeatures: {
+      piiRedaction: true,
+      promptInjectionShield: true,
+      rateLimiterActive: true,
+      responseCompression: true
+    }
+  });
 });
 
-// Endpoint: Analyze contract
+// Cache Telemetry & Invalidation Endpoints
+app.get("/api/cache/stats", (_req, res) => {
+  res.json(globalCache.getStats());
+});
+
+app.post("/api/cache/clear", (_req, res) => {
+  globalCache.clear();
+  res.json({ message: "Cache successfully cleared", stats: globalCache.getStats() });
+});
+
+// Endpoint: Generate Attorney Consultation Preparation Sheet
+app.post("/api/generate-attorney-prep", (req, res) => {
+  try {
+    const { analysis, clientObjective, jurisdiction } = req.body;
+    if (!analysis) {
+      return res.status(400).json({ error: "Contract analysis data is required." });
+    }
+    const prepSheet = generateAttorneyPrepSheet(analysis, clientObjective, jurisdiction);
+    const markdown = formatPrepSheetAsMarkdown(prepSheet);
+    return res.json({ prepSheet, markdown });
+  } catch (err: any) {
+    console.error("Error in /api/generate-attorney-prep:", err);
+    return res.status(500).json({ error: err.message || "Failed to generate attorney prep sheet." });
+  }
+});
+
+// Endpoint: Analyze contract with Security Guardrails, PII Masking, and LRU Caching
 app.post("/api/analyze-contract", async (req, res) => {
   try {
-    const { documentText, documentTitle = "Legal Document", userPerspective = "User / Signer" } = req.body;
+    const { 
+      documentText, 
+      documentTitle = "Legal Document", 
+      userPerspective = "User / Signer",
+      maskPII = true 
+    } = req.body;
 
-    if (!documentText || typeof documentText !== "string" || documentText.trim().length < 20) {
-      return res.status(400).json({ error: "Please provide valid legal document text with at least 20 characters." });
+    // 1. Enterprise Security Guardrails & PII Sanitization
+    const validation = sanitizeContractInput(documentText, maskPII !== false);
+    if (!validation.isValid) {
+      return res.status(400).json({ error: validation.error || "Please provide valid legal document text." });
     }
+
+    const sanitizedDocText = validation.sanitizedText;
+
+    // 2. High-Performance LRU Cache Fingerprint Check
+    const cacheKey = globalCache.generateKey("analyze", { text: sanitizedDocText, userPerspective });
+    const cached = globalCache.get<any>(cacheKey);
+    if (cached) {
+      res.setHeader("X-Cache", "HIT");
+      res.setHeader("X-Cache-Saved-Ms", (cached.savedMs || 1000).toString());
+      return res.json({
+        ...cached.data,
+        cached: true,
+        securityAudit: validation.securityAudit,
+      });
+    }
+
+    res.setHeader("X-Cache", "MISS");
 
     const ai = getGeminiClient();
 
     if (!ai) {
       // High-quality deterministic fallback analyzer if API key is not yet configured
-      const fallbackAnalysis = generateFallbackAnalysis(documentText, documentTitle);
+      const fallbackAnalysis = generateFallbackAnalysis(sanitizedDocText, documentTitle);
+      (fallbackAnalysis as any).securityAudit = validation.securityAudit;
+      globalCache.set(cacheKey, fallbackAnalysis, 1000 * 60 * 30);
       return res.json(fallbackAnalysis);
     }
 
@@ -111,7 +183,7 @@ Your goal is to demystify complex legalese, surface hidden liabilities, evaluate
 Document Title: ${documentTitle}
 Document Text:
 """
-${documentText.slice(0, 30000)}
+${sanitizedDocText.slice(0, 30000)}
 """
 
 Respond with a strictly formatted JSON object adhering to this structure:
@@ -203,7 +275,11 @@ Respond with a strictly formatted JSON object adhering to this structure:
     parsed.id = "analysis-" + Date.now();
     parsed.documentTitle = documentTitle;
     parsed.analyzedAt = new Date().toISOString();
-    parsed.rawText = documentText;
+    parsed.rawText = sanitizedDocText;
+    parsed.securityAudit = validation.securityAudit;
+
+    // Cache the result for 30 minutes
+    globalCache.set(cacheKey, parsed, 1000 * 60 * 30);
 
     return res.json(parsed);
   } catch (error: any) {
@@ -223,10 +299,36 @@ app.post(["/api/compare-contracts", "/api/compare-documents"], async (req, res) 
       return res.status(400).json({ error: "Both Document A and Document B are required for comparison." });
     }
 
+    // Input sanitization
+    const valA = sanitizeContractInput(docA.content);
+    const valB = sanitizeContractInput(docB.content);
+    if (!valA.isValid || !valB.isValid) {
+      return res.status(400).json({ error: "One or both document texts failed validation." });
+    }
+
+    // Cache check
+    const cacheKey = globalCache.generateKey("compare", {
+      a: valA.sanitizedText,
+      b: valB.sanitizedText,
+      context,
+    });
+    const cached = globalCache.get<any>(cacheKey);
+    if (cached) {
+      res.setHeader("X-Cache", "HIT");
+      res.setHeader("X-Cache-Saved-Ms", (cached.savedMs || 1500).toString());
+      return res.json({ ...cached.data, cached: true });
+    }
+
+    res.setHeader("X-Cache", "MISS");
+
     const ai = getGeminiClient();
 
     if (!ai) {
-      const fallbackComparison = generateFallbackComparison(docA, docB);
+      const fallbackComparison = generateFallbackComparison(
+        { ...docA, content: valA.sanitizedText },
+        { ...docB, content: valB.sanitizedText }
+      );
+      globalCache.set(cacheKey, fallbackComparison, 1000 * 60 * 30);
       return res.json(fallbackComparison);
     }
 
@@ -239,14 +341,14 @@ DOCUMENT A (e.g. Original / Standard / Version A):
 Title: ${docA.title || "Document A"}
 Content:
 """
-${docA.content.slice(0, 15000)}
+${valA.sanitizedText.slice(0, 15000)}
 """
 
 DOCUMENT B (e.g. Revised / Markup / Version B):
 Title: ${docB.title || "Document B"}
 Content:
 """
-${docB.content.slice(0, 15000)}
+${valB.sanitizedText.slice(0, 15000)}
 """
 
 Provide an objective side-by-side analysis in JSON format:
@@ -284,6 +386,7 @@ Provide an objective side-by-side analysis in JSON format:
     parsed.docBTitle = docB.title || "Document B";
     parsed.comparedAt = new Date().toISOString();
 
+    globalCache.set(cacheKey, parsed, 1000 * 60 * 30);
     return res.json(parsed);
   } catch (error: any) {
     console.error("Error in /api/compare-contracts:", error);
@@ -292,19 +395,34 @@ Provide an objective side-by-side analysis in JSON format:
   }
 });
 
-// Endpoint: Decode a single legal clause
+// Endpoint: Decode a single legal clause with sanitization & LRU caching
 app.post(["/api/decode-clause", "/api/decode-jargon"], async (req, res) => {
   try {
     const { clauseText } = req.body;
 
-    if (!clauseText || typeof clauseText !== "string" || clauseText.trim().length < 5) {
-      return res.status(400).json({ error: "Please provide a legal clause or sentence to decode." });
+    const val = sanitizeContractInput(clauseText);
+    if (!val.isValid) {
+      return res.status(400).json({ error: val.error || "Please provide a legal clause or sentence to decode." });
     }
+
+    const sanitizedClause = val.sanitizedText;
+
+    // Cache check
+    const cacheKey = globalCache.generateKey("decode", sanitizedClause);
+    const cached = globalCache.get<any>(cacheKey);
+    if (cached) {
+      res.setHeader("X-Cache", "HIT");
+      return res.json({ ...cached.data, cached: true });
+    }
+
+    res.setHeader("X-Cache", "MISS");
 
     const ai = getGeminiClient();
 
     if (!ai) {
-      return res.json(generateFallbackClauseDecode(clauseText));
+      const fallback = generateFallbackClauseDecode(sanitizedClause);
+      globalCache.set(cacheKey, fallback, 1000 * 60 * 60);
+      return res.json(fallback);
     }
 
     const prompt = `You are ClarifyLegal's instant jargon decoder.
@@ -313,7 +431,7 @@ Identify hidden traps and draft a balanced, fair counter-clause.
 
 Clause:
 """
-${clauseText.slice(0, 4000)}
+${sanitizedClause.slice(0, 4000)}
 """
 
 Return JSON:
@@ -339,6 +457,7 @@ Return JSON:
     const cleaned = rawText.trim().replace(/^```json\s*/i, "").replace(/\s*```$/i, "");
     const parsed = JSON.parse(cleaned);
 
+    globalCache.set(cacheKey, parsed, 1000 * 60 * 60);
     return res.json(parsed);
   } catch (error: any) {
     console.error("Error in /api/decode-clause:", error);
@@ -493,31 +612,34 @@ Respond strictly with valid JSON matching this schema:
   }
 });
 
-// Endpoint: Interactive legal navigator Q&A
+// Endpoint: Interactive legal navigator Q&A with Sanitization & Caching
 app.post("/api/ask-navigator", async (req, res) => {
   try {
     const { question, context = "", history = [] } = req.body;
 
-    if (!question || typeof question !== "string") {
-      return res.status(400).json({ error: "Please provide a valid question." });
+    const val = sanitizeUserMessage(question);
+    if (!val.isValid) {
+      return res.status(400).json({ error: val.error || "Please provide a valid question." });
     }
+
+    const sanitizedQuestion = val.sanitized;
+
+    // Cache check
+    const cacheKey = globalCache.generateKey("navigator", { q: sanitizedQuestion, ctx: (context || "").slice(0, 500) });
+    const cached = globalCache.get<any>(cacheKey);
+    if (cached) {
+      res.setHeader("X-Cache", "HIT");
+      return res.json({ ...cached.data, cached: true });
+    }
+
+    res.setHeader("X-Cache", "MISS");
 
     const ai = getGeminiClient();
 
     if (!ai) {
-      return res.json({
-        content: `**Legal Information Overview**\n\nRegarding: "${question}"\n\n1. **Core Legal Principle**: Generally in contract and civil law, agreements require mutual assent, clear terms, and statutory compliance. Standard rights (such as implied warranty of habitability in leases, or prompt payment statutes for contractors) cannot typically be waived unilaterally in consumer or tenant contexts.\n\n2. **Practical Key Factors**:\n- Review the exact contract text for written notice requirements.\n- Check local statutory guidelines (e.g., local state housing or consumer protection laws).\n- Document all communications in writing (email/certified letter) rather than verbal agreements.\n\n3. **Actionable Steps**:\n- Gather all invoices, timestamps, and signed agreements.\n- Request written clarification citing specific section numbers.\n- Consult a local legal aid clinic or licensed attorney if financial liability is substantial.\n\n*Disclaimer: This response provides educational legal information and analysis only. It does not constitute legal advice or create an attorney-client relationship.*`,
-        suggestedQuestions: [
-          "How do I write a formal notice to cure breach?",
-          "What clauses are commonly unenforceable in my state?",
-          "How can I negotiate without losing the deal?"
-        ],
-        actionChecklist: [
-          "Collect written records and receipts",
-          "Identify specific contract clause numbers",
-          "Check local statutory grace periods"
-        ]
-      });
+      const fallback = generateFallbackNavigatorAnswer(sanitizedQuestion, context || "");
+      globalCache.set(cacheKey, fallback, 1000 * 60 * 30);
+      return res.json(fallback);
     }
 
     const prompt = `You are ClarifyLegal Navigator, an AI legal educator and information assistant.
@@ -529,7 +651,7 @@ Context / Document snippet (if any):
 ${context ? `"""${context.slice(0, 4000)}"""` : "No specific document attached."}
 
 User's Question:
-"${question}"
+"${sanitizedQuestion}"
 
 Provide a structured, beautifully formatted response in JSON:
 {
@@ -549,7 +671,10 @@ Provide a structured, beautifully formatted response in JSON:
 
     const rawText = response.text || "{}";
     const cleaned = rawText.trim().replace(/^```json\s*/i, "").replace(/\s*```$/i, "");
-    return res.json(JSON.parse(cleaned));
+    const parsed = JSON.parse(cleaned);
+
+    globalCache.set(cacheKey, parsed, 1000 * 60 * 30);
+    return res.json(parsed);
   } catch (error: any) {
     console.error("Error in /api/ask-navigator:", error);
     // Fallback on model busy or rate limit so the user always gets a high quality response
@@ -615,11 +740,15 @@ Keep answers structured, balanced, clear, and actionable.`;
       roleSystemInstruction += `\n\nACTIVE DOCUMENT CONTEXT FROM USER'S WORKSPACE:\n"""\n${documentContext.trim().slice(0, 30000)}\n"""\nReference this document directly whenever relevant.`;
     }
 
-    // Map conversation history into Gemini format
-    const contents = messages.map((m: any) => ({
-      role: m.role === "assistant" || m.role === "model" ? "model" : "user",
-      parts: [{ text: String(m.content || "") }]
-    }));
+    // Map conversation history into Gemini format with active sanitization
+    const contents = messages.map((m: any) => {
+      const isModel = m.role === "assistant" || m.role === "model";
+      const cleanText = isModel ? String(m.content || "") : sanitizeUserMessage(m.content || "").sanitized;
+      return {
+        role: isModel ? "model" : "user",
+        parts: [{ text: cleanText }]
+      };
+    });
 
     // Ensure last turn is user
     if (contents[contents.length - 1].role !== "user") {

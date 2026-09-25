@@ -15,11 +15,13 @@ import {
   Smile,
   Shield,
   Handshake,
-  Download
+  Download,
+  Briefcase
 } from 'lucide-react';
 import { CriticalClause, ContractAnalysisResult } from '../types';
 import { CounterpartySimulator } from './CounterpartySimulator';
 import { AmendedContractExportModal } from './AmendedContractExportModal';
+import { AttorneyPrepModal } from './AttorneyPrepModal';
 
 interface ActionPlaybookProps {
   currentAnalysis?: ContractAnalysisResult | null;
@@ -51,6 +53,7 @@ export const ActionPlaybook: React.FC<ActionPlaybookProps> = ({
   const [copiedBrief, setCopiedBrief] = useState(false);
   const [checkedChecklist, setCheckedChecklist] = useState<Record<string, boolean>>({});
   const [isAmendedModalOpen, setIsAmendedModalOpen] = useState(false);
+  const [isAttorneyPrepModalOpen, setIsAttorneyPrepModalOpen] = useState(false);
 
   // When prefilledClause changes
   React.useEffect(() => {
@@ -539,6 +542,17 @@ ${generatedProposal.talkingPoints?.map((tp: string) => `• ${tp}`).join('\n') |
                 3. "How would an arbitrator interpret the indemnification clause in case of third-party copyright claims?"
               </li>
             </ul>
+
+            {currentAnalysis && (
+              <button
+                id="playbook-attorney-prep-btn"
+                onClick={() => setIsAttorneyPrepModalOpen(true)}
+                className="w-full mt-3 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-sm"
+              >
+                <Briefcase className="w-3.5 h-3.5 text-indigo-200" />
+                <span>Generate Full Attorney Prep Brief & Questions</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -548,6 +562,15 @@ ${generatedProposal.talkingPoints?.map((tp: string) => `• ${tp}`).join('\n') |
         <AmendedContractExportModal
           isOpen={isAmendedModalOpen}
           onClose={() => setIsAmendedModalOpen(false)}
+          analysis={currentAnalysis}
+        />
+      )}
+
+      {/* Attorney Consultation Prep Sheet Modal */}
+      {currentAnalysis && (
+        <AttorneyPrepModal
+          isOpen={isAttorneyPrepModalOpen}
+          onClose={() => setIsAttorneyPrepModalOpen(false)}
           analysis={currentAnalysis}
         />
       )}
