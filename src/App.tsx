@@ -370,7 +370,11 @@ export default function App() {
           tabIndex={-1} 
           role="main" 
           aria-label="ClarifyLegal Document & Negotiation Workspace"
-          className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto focus:outline-none"
+          className={
+            activeTab === 'chatbot' || activeTab === 'voice'
+              ? 'flex-1 flex flex-col min-h-0 w-full max-w-5xl mx-auto p-2 sm:p-4 focus:outline-none h-[calc(100vh-4rem)] overflow-hidden'
+              : 'flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto focus:outline-none'
+          }
         >
           <Suspense fallback={
             <div className="w-full py-20 flex flex-col items-center justify-center space-y-3" role="status" aria-live="polite">

@@ -15,10 +15,9 @@ import {
   RefreshCw, 
   User, 
   AlertCircle,
-  HelpCircle,
-  Scale,
   SlidersHorizontal,
-  ChevronDown
+  ChevronDown,
+  Info
 } from 'lucide-react';
 import { ChatbotMessage, ChatbotRolePreset, ContractAnalysisResult } from '../types';
 
@@ -29,7 +28,6 @@ interface GeminiChatbotProps {
 
 export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({
   currentAnalysis,
-  onNavigateToAnalyzer,
 }) => {
   // Model and Role Selection
   // Complex tasks: gemini-3.1-pro-preview
@@ -83,6 +81,15 @@ Choose your task profile above: **Complex Reasoning** (Gemini Pro), **General Ta
   useEffect(() => {
     scrollToBottom();
   }, [messages, isLoading]);
+
+  // Auto-resize textarea smoothly up to 120px
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      const scrollHeight = textareaRef.current.scrollHeight;
+      textareaRef.current.style.height = `${Math.min(Math.max(scrollHeight, 40), 120)}px`;
+    }
+  }, [inputPrompt]);
 
   // Synchronize model when role preset changes
   const handleRoleChange = (role: ChatbotRolePreset) => {
@@ -256,198 +263,188 @@ Recommendation: ${c.recommendation}`).join('\n\n')}`;
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-5rem)] max-w-6xl mx-auto px-4 py-4 space-y-3">
-      {/* Header Bar: Role, Model, Context and Action Controls */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* Title & Brand */}
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shadow-xs">
-              <Bot className="w-5 h-5" />
+    <div className="flex-1 flex flex-col min-h-0 w-full h-full max-w-5xl mx-auto space-y-2">
+      {/* Sleek, Ultra-Compact Top Bar */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl px-3 py-2 shadow-xs shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {/* Left: Brand & Model Switcher Pills */}
+          <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shrink-0">
+              <Bot className="w-4 h-4" />
             </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <h1 className="text-lg font-bold text-slate-900 tracking-tight">Gemini Legal Chatbot</h1>
-                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                  Multi-Turn AI
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">
-                Context-aware legal analysis, clause drafting, and negotiation advisory
-              </p>
-            </div>
-          </div>
 
-          {/* Role & Model Switcher Tabs */}
-          <div className="flex items-center flex-wrap gap-2">
-            <div className="bg-slate-100 p-1 rounded-xl border border-slate-200 flex items-center space-x-1">
+            {/* Segmented Model Pills */}
+            <div className="bg-slate-100 p-0.5 rounded-xl border border-slate-200/80 flex items-center">
               <button
                 onClick={() => handleRoleChange('complex')}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   selectedRole === 'complex'
-                    ? 'bg-purple-100 text-purple-900 border border-purple-300 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
-                title="Complex tasks: deep forensic reasoning with gemini-3.1-pro-preview"
+                title="Deep forensic legal reasoning with gemini-3.1-pro-preview"
               >
-                <ShieldAlert className="w-3.5 h-3.5 text-purple-700" />
-                <span>Complex (Pro)</span>
+                <ShieldAlert className="w-3 h-3" />
+                <span>Pro</span>
               </button>
 
               <button
                 onClick={() => handleRoleChange('general')}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   selectedRole === 'general'
-                    ? 'bg-indigo-100 text-indigo-900 border border-indigo-300 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
-                title="General tasks: balanced contract review with gemini-3.5-flash"
+                title="Balanced contract review with gemini-3.5-flash"
               >
-                <Sparkles className="w-3.5 h-3.5 text-indigo-700" />
-                <span>General (3.5 Flash)</span>
+                <Sparkles className="w-3 h-3" />
+                <span>3.5 Flash</span>
               </button>
 
               <button
                 onClick={() => handleRoleChange('fast')}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   selectedRole === 'fast'
-                    ? 'bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
-                title="Fast tasks: ultra-speedy clause checks with gemini-3.1-flash-lite"
+                title="Rapid clause triage with gemini-3.1-flash-lite"
               >
-                <Zap className="w-3.5 h-3.5 text-emerald-700" />
-                <span>Fast (Flash-Lite)</span>
+                <Zap className="w-3 h-3" />
+                <span>Flash-Lite</span>
               </button>
             </div>
 
-            {/* Model override dropdown */}
-            <div className="relative">
+            {/* Model Dropdown Override */}
+            <div className="relative hidden md:block">
               <select
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
-                className="appearance-none bg-white border border-slate-200 text-slate-800 text-xs font-mono py-1.5 pl-2.5 pr-7 rounded-xl focus:outline-none focus:border-indigo-500 cursor-pointer shadow-xs"
-                title="Active Gemini Model"
+                className="appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-mono py-1 pl-2 pr-6 rounded-lg focus:outline-none focus:border-indigo-500 cursor-pointer"
+                title="Active Model Engine"
               >
-                <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview (Complex)</option>
-                <option value="gemini-3.5-flash">gemini-3.5-flash (General)</option>
-                <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Fast)</option>
+                <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
+                <option value="gemini-3.5-flash">gemini-3.5-flash</option>
+                <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
               </select>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-2.5 pointer-events-none" />
+              <ChevronDown className="w-3 h-3 text-slate-400 absolute right-1.5 top-2 pointer-events-none" />
             </div>
+          </div>
 
-            {/* Utility Buttons */}
-            <div className="flex items-center space-x-1 border-l border-slate-200 pl-2">
+          {/* Right: Document Context Pill & Actions */}
+          <div className="flex items-center space-x-2 shrink-0">
+            {/* Linked Document Pill */}
+            {currentAnalysis && (
+              <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-xl text-xs bg-slate-50 border border-slate-200 text-slate-700 max-w-[220px] sm:max-w-[280px]">
+                <FileText className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <span className="font-medium truncate text-xs" title={currentAnalysis.documentTitle}>
+                  {currentAnalysis.documentTitle}
+                </span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold shrink-0 ${
+                  currentAnalysis.riskLevel === 'Severe' ? 'bg-rose-100 text-rose-700' :
+                  currentAnalysis.riskLevel === 'High' ? 'bg-amber-100 text-amber-700' :
+                  currentAnalysis.riskLevel === 'Moderate' ? 'bg-yellow-100 text-yellow-800' :
+                  'bg-emerald-100 text-emerald-700'
+                }`}>
+                  {currentAnalysis.riskScore}/100
+                </span>
+                <button
+                  onClick={() => setIncludeDocumentContext(!includeDocumentContext)}
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-semibold cursor-pointer shrink-0 transition-colors ${
+                    includeDocumentContext ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-500'
+                  }`}
+                  title={includeDocumentContext ? 'Document context injected. Click to exclude.' : 'Document context excluded. Click to inject.'}
+                >
+                  {includeDocumentContext ? 'Context On' : 'Off'}
+                </button>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex items-center space-x-1 pl-1">
               <button
                 onClick={() => setShowCustomInstructions(!showCustomInstructions)}
-                className={`p-2 rounded-xl text-xs font-medium border transition-colors cursor-pointer ${
+                className={`p-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
                   showCustomInstructions || customInstruction
                     ? 'bg-indigo-50 text-indigo-700 border-indigo-300'
-                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900'
+                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:text-slate-800'
                 }`}
-                title="Configure custom system instructions for chatbot roles"
+                title="Configure custom persona instructions"
               >
-                <SlidersHorizontal className="w-4 h-4" />
+                <SlidersHorizontal className="w-3.5 h-3.5" />
               </button>
 
               <button
                 onClick={handleExportChat}
-                className="p-2 rounded-xl bg-white text-slate-600 border border-slate-200 hover:text-slate-900 hover:bg-slate-50 text-xs font-medium transition-colors cursor-pointer"
-                title="Export conversation history (.md)"
+                className="p-1.5 rounded-lg bg-white text-slate-500 border border-slate-200 hover:text-slate-800 hover:bg-slate-50 text-xs font-medium transition-colors cursor-pointer"
+                title="Export conversation as Markdown (.md)"
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-3.5 h-3.5" />
               </button>
 
               <button
                 onClick={handleClearChat}
-                className="p-2 rounded-xl bg-white text-slate-600 border border-slate-200 hover:text-red-600 hover:bg-red-50 hover:border-red-200 text-xs font-medium transition-colors cursor-pointer"
-                title="Clear conversation"
+                className="p-1.5 rounded-lg bg-white text-slate-500 border border-slate-200 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200 text-xs font-medium transition-colors cursor-pointer"
+                title="Clear conversation history"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
         </div>
 
-        {/* Expandable Custom System Instructions Panel */}
+        {/* Expandable Custom System Instructions Drawer */}
         {showCustomInstructions && (
-          <div className="mt-3 pt-3 border-t border-slate-100 animate-fadeIn">
-            <div className="flex items-center justify-between mb-1.5">
+          <div className="mt-2 pt-2 border-t border-slate-100 animate-fadeIn">
+            <div className="flex items-center justify-between mb-1">
               <label className="text-xs font-semibold text-slate-700 flex items-center space-x-1.5">
-                <Settings2 className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Custom Persona & System Instructions (Injected into Gemini)</span>
+                <Settings2 className="w-3 h-3 text-indigo-600" />
+                <span>Custom Persona & System Instructions</span>
               </label>
-              <span className="text-[11px] text-slate-500">
-                Preset active: {selectedRole === 'complex' ? 'Forensic Legal Counsel' : selectedRole === 'fast' ? 'Rapid Clause Assistant' : 'Contract Navigator'}
+              <span className="text-[10px] text-slate-500">
+                Active role: {selectedRole === 'complex' ? 'Forensic Legal Counsel' : selectedRole === 'fast' ? 'Rapid Clause Assistant' : 'Contract Navigator'}
               </span>
             </div>
             <textarea
               value={customInstruction}
               onChange={(e) => setCustomInstruction(e.target.value)}
-              placeholder="e.g. You are advising a freelance React developer in New York negotiating with a Fortune 500 client. Emphasize ownership of developer tooling and ensure Net-30 payment with late interest."
+              placeholder="e.g. You are advising a freelance developer in California. Focus on IP rights, ownership of developer tools, Net-30 payment, and indemnity caps."
               rows={2}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-indigo-500 font-mono resize-none"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-indigo-500 font-mono resize-none"
             />
-          </div>
-        )}
-
-        {/* Current Document Context Badge */}
-        {currentAnalysis && (
-          <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center space-x-2 text-xs text-slate-600">
-              <FileText className="w-3.5 h-3.5 text-indigo-600" />
-              <span className="text-slate-500">Linked Document:</span>
-              <span className="font-semibold text-slate-800">{currentAnalysis.documentTitle}</span>
-              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
-                currentAnalysis.riskLevel === 'Severe' ? 'bg-rose-50 text-rose-700 border-rose-200' :
-                currentAnalysis.riskLevel === 'High' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                currentAnalysis.riskLevel === 'Moderate' ? 'bg-yellow-50 text-yellow-800 border-yellow-200' :
-                'bg-emerald-50 text-emerald-700 border-emerald-200'
-              }`}>
-                Risk {currentAnalysis.riskScore}/100
-              </span>
-            </div>
-
-            <label className="flex items-center space-x-2 text-xs text-slate-600 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={includeDocumentContext}
-                onChange={(e) => setIncludeDocumentContext(e.target.checked)}
-                className="rounded border-slate-300 text-indigo-600 focus:ring-0 w-3.5 h-3.5 cursor-pointer"
-              />
-              <span className={includeDocumentContext ? 'text-indigo-700 font-semibold' : 'text-slate-500'}>
-                {includeDocumentContext ? 'Injecting Contract Context into Chat' : 'Context Excluded'}
-              </span>
-            </label>
           </div>
         )}
       </div>
 
-      {/* Messages Thread Container (Scrollable) */}
-      <div className="flex-1 overflow-y-auto rounded-2xl bg-white border border-slate-200 p-4 space-y-4 shadow-xs">
+      {/* Main Messages Area (Takes all remaining screen height) */}
+      <div 
+        tabIndex={0}
+        aria-label="Conversation Messages Thread"
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden rounded-2xl bg-white border border-slate-200/90 p-4 sm:p-5 space-y-5 shadow-xs focus:outline-none"
+      >
         {messages.map((message) => {
           const isUser = message.role === 'user';
           return (
             <div
               key={message.id}
-              className={`flex items-start gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}
+              className={`flex items-start gap-2.5 sm:gap-3.5 ${isUser ? 'justify-end' : 'justify-start'}`}
             >
               {!isUser && (
-                <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-xs">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
                   <Bot className="w-4 h-4" />
                 </div>
               )}
 
               <div
-                className={`max-w-[84%] md:max-w-[76%] rounded-2xl p-4 shadow-xs transition-all ${
+                className={`rounded-2xl transition-all ${
                   isUser
-                    ? 'bg-indigo-600 text-white rounded-tr-none'
-                    : 'bg-slate-50 text-slate-800 border border-slate-200/90 rounded-tl-none'
+                    ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-tr-xs p-3.5 sm:p-4 shadow-xs max-w-[85%] sm:max-w-[75%]'
+                    : 'bg-slate-50/90 text-slate-800 border border-slate-200/90 rounded-tl-xs p-4 sm:p-5 shadow-xs w-full max-w-[95%] sm:max-w-[90%]'
                 }`}
               >
-                {/* Header info */}
+                {/* Bubble Header */}
                 <div className={`flex items-center justify-between gap-3 mb-2 pb-1.5 border-b text-[11px] ${
-                  isUser ? 'border-indigo-500/50 text-indigo-100' : 'border-slate-200/80 text-slate-500'
+                  isUser ? 'border-indigo-400/40 text-indigo-100' : 'border-slate-200/80 text-slate-500'
                 }`}>
                   <span className="font-semibold tracking-wide">
                     {isUser ? 'You' : 'ClarifyLegal Advisor'}
@@ -457,7 +454,7 @@ Recommendation: ${c.recommendation}`).join('\n\n')}`;
                       <span className={`px-1.5 py-0.5 rounded font-mono text-[10px] ${
                         isUser 
                           ? 'bg-indigo-700/60 text-indigo-100 border border-indigo-400/30' 
-                          : 'bg-white text-slate-600 border border-slate-200 shadow-xs'
+                          : 'bg-white text-slate-600 border border-slate-200 shadow-2xs'
                       }`}>
                         {message.model}
                       </span>
@@ -467,7 +464,8 @@ Recommendation: ${c.recommendation}`).join('\n\n')}`;
                       <button
                         onClick={() => handleCopyMessage(message.id, message.content)}
                         className="hover:text-slate-900 p-0.5 rounded transition-colors cursor-pointer"
-                        title="Copy message"
+                        title="Copy message to clipboard"
+                        aria-label="Copy assistant response"
                       >
                         {copiedMessageId === message.id ? (
                           <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -479,16 +477,51 @@ Recommendation: ${c.recommendation}`).join('\n\n')}`;
                   </div>
                 </div>
 
-                {/* Markdown Body */}
-                <div className={`prose prose-xs sm:prose-sm max-w-none break-words leading-relaxed ${
-                  isUser ? 'prose-invert text-white' : 'prose-slate text-slate-800'
+                {/* Markdown Body with Clean Spacing & Wrapped Code/Tables */}
+                <div className={`text-sm leading-relaxed break-words ${
+                  isUser ? 'text-white' : 'text-slate-800'
                 }`}>
-                  <ReactMarkdown>{message.content}</ReactMarkdown>
+                  <ReactMarkdown
+                    components={{
+                      p: ({ node, ...props }) => <p className="mb-2.5 last:mb-0" {...props} />,
+                      h1: ({ node, ...props }) => <h1 className="text-base font-bold text-slate-900 mt-3 mb-2" {...props} />,
+                      h2: ({ node, ...props }) => <h2 className="text-sm font-bold text-slate-900 mt-2.5 mb-1.5" {...props} />,
+                      h3: ({ node, ...props }) => <h3 className="text-xs font-bold text-indigo-900 uppercase tracking-wide mt-2 mb-1" {...props} />,
+                      ul: ({ node, ...props }) => <ul className="list-disc pl-5 mb-2.5 space-y-1" {...props} />,
+                      ol: ({ node, ...props }) => <ol className="list-decimal pl-5 mb-2.5 space-y-1" {...props} />,
+                      li: ({ node, ...props }) => <li className="mb-0.5" {...props} />,
+                      strong: ({ node, ...props }) => <strong className={`font-semibold ${isUser ? 'text-white' : 'text-slate-900'}`} {...props} />,
+                      blockquote: ({ node, ...props }) => (
+                        <blockquote className="border-l-3 border-indigo-400 pl-3 my-2 italic text-slate-600 bg-indigo-50/40 py-1 rounded-r" {...props} />
+                      ),
+                      code: ({ node, className, children, ...props }: any) => {
+                        const isInline = !className;
+                        return isInline ? (
+                          <code className="px-1.5 py-0.5 rounded bg-slate-200/80 text-slate-900 font-mono text-[11px]" {...props}>
+                            {children}
+                          </code>
+                        ) : (
+                          <div className="overflow-x-auto my-2 rounded-xl bg-slate-900 text-slate-100 p-3 text-xs font-mono whitespace-pre-wrap break-words">
+                            <code {...props}>{children}</code>
+                          </div>
+                        );
+                      },
+                      table: ({ node, ...props }) => (
+                        <div className="overflow-x-auto my-2 rounded-lg border border-slate-200">
+                          <table className="w-full text-xs text-left divide-y divide-slate-200" {...props} />
+                        </div>
+                      ),
+                      th: ({ node, ...props }) => <th className="bg-slate-100 px-3 py-2 font-semibold text-slate-700" {...props} />,
+                      td: ({ node, ...props }) => <td className="px-3 py-2 border-t border-slate-100" {...props} />,
+                    }}
+                  >
+                    {message.content}
+                  </ReactMarkdown>
                 </div>
               </div>
 
               {isUser && (
-                <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white p-0.5 shadow-xs flex-shrink-0 mt-0.5 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white shadow-xs shrink-0 mt-0.5 flex items-center justify-center">
                   <User className="w-4 h-4 text-white" />
                 </div>
               )}
@@ -496,13 +529,43 @@ Recommendation: ${c.recommendation}`).join('\n\n')}`;
           );
         })}
 
-        {/* Loading Bubble */}
+        {/* Suggestion Starter Prompts (Embedded right inside the welcome view) */}
+        {messages.length <= 1 && !isLoading && (
+          <div className="pt-2 pb-1">
+            <div className="flex items-center space-x-1.5 text-xs font-semibold text-slate-500 mb-2">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Suggested Prompts to Get Started:</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {suggestionPrompts.map((item, index) => (
+                <button
+                  key={index}
+                  onClick={() => {
+                    handleRoleChange(item.role);
+                    handleSendMessage(item.prompt);
+                  }}
+                  className="text-left bg-slate-50/80 hover:bg-indigo-50/60 border border-slate-200 hover:border-indigo-300 rounded-xl p-3 transition-all cursor-pointer group"
+                >
+                  <div className="text-xs font-semibold text-slate-800 group-hover:text-indigo-700 flex items-center justify-between">
+                    <span>{item.title}</span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-white text-slate-600 font-semibold border border-slate-200">
+                      {item.role}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1 line-clamp-1">{item.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Loading Spinner Indicator */}
         {isLoading && (
           <div className="flex items-start gap-3 justify-start animate-fadeIn">
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
               <Bot className="w-4 h-4 animate-pulse" />
             </div>
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl rounded-tl-none p-4 shadow-xs max-w-sm">
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl rounded-tl-xs p-3.5 shadow-xs max-w-sm">
               <div className="flex items-center space-x-2 text-xs text-indigo-700">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" />
                 <span className="font-semibold">
@@ -518,36 +581,12 @@ Recommendation: ${c.recommendation}`).join('\n\n')}`;
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Suggested Starter Chips */}
-      {messages.length <= 2 && !isLoading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 pt-1">
-          {suggestionPrompts.map((item, index) => (
-            <button
-              key={index}
-              onClick={() => {
-                handleRoleChange(item.role);
-                handleSendMessage(item.prompt);
-              }}
-              className="text-left bg-white hover:bg-indigo-50/40 border border-slate-200 hover:border-indigo-300 rounded-xl p-2.5 transition-all shadow-xs cursor-pointer group"
-            >
-              <div className="text-xs font-semibold text-slate-800 group-hover:text-indigo-700 flex items-center justify-between">
-                <span>{item.title}</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold border border-slate-200">
-                  {item.role}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-500 mt-1 line-clamp-1">{item.desc}</p>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Input Prompt Box */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-xs">
+      {/* Sleek Floating Bottom Input Capsule */}
+      <div className="shrink-0 bg-white border border-slate-300/90 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100 rounded-2xl p-2 sm:p-2.5 shadow-sm transition-all">
         {activeError && (
-          <div className="mb-2 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center justify-between">
+          <div className="mb-2 p-2 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+              <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
               <span>{activeError}</span>
             </div>
             <button 
@@ -565,32 +604,35 @@ Recommendation: ${c.recommendation}`).join('\n\n')}`;
             value={inputPrompt}
             onChange={(e) => setInputPrompt(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={`Ask a legal question, request clause redlining, or clarify contract terms (${selectedModel})...`}
-            rows={2}
-            className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none"
+            placeholder={`Ask a legal question, audit clauses, or draft counter-proposals (${selectedModel})...`}
+            rows={1}
+            className="flex-1 bg-transparent border-0 px-2.5 py-1 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-0 resize-none max-h-28 leading-relaxed font-sans"
+            style={{ minHeight: '38px' }}
           />
 
           <button
             onClick={() => handleSendMessage()}
             disabled={!inputPrompt.trim() || isLoading}
-            className={`p-3 rounded-xl font-semibold transition-all flex items-center justify-center shadow-xs cursor-pointer ${
+            className={`w-10 h-10 rounded-xl font-semibold transition-all flex items-center justify-center shadow-xs shrink-0 cursor-pointer ${
               !inputPrompt.trim() || isLoading
                 ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
                 : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200 active:scale-95'
             }`}
             title="Send message (Enter)"
+            aria-label="Send message"
           >
-            <Send className="w-5 h-5" />
+            <Send className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="flex items-center justify-between mt-2 px-1 text-[11px] text-slate-500">
-          <div className="flex items-center space-x-3">
-            <span>Press <kbd className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[10px] border border-slate-200">Enter</kbd> to send, <kbd className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[10px] border border-slate-200">Shift+Enter</kbd> for newline</span>
+        {/* Compact Footer Line with Status Indicator */}
+        <div className="flex items-center justify-between pt-1.5 px-2 text-[11px] text-slate-400 border-t border-slate-100 mt-1">
+          <div className="flex items-center space-x-2">
+            <span>Press <kbd className="px-1 py-0.2 rounded bg-slate-100 text-slate-600 font-mono text-[10px] border border-slate-200">Enter</kbd> to send, <kbd className="px-1 py-0.2 rounded bg-slate-100 text-slate-600 font-mono text-[10px] border border-slate-200">Shift+Enter</kbd> for newline</span>
           </div>
           <div className="flex items-center space-x-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span className="font-semibold text-slate-700">Gemini Ready</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span className="font-medium text-slate-600 text-[11px]">{selectedModel}</span>
           </div>
         </div>
       </div>
