@@ -28,6 +28,17 @@ app.use((_req, res, next) => {
   next();
 });
 
+// Public static directory & Favicon handlers
+app.use(express.static(path.join(process.cwd(), "public")));
+app.get("/favicon.ico", (_req, res) => {
+  res.sendFile(path.join(process.cwd(), "public", "favicon.svg"), {
+    headers: { "Content-Type": "image/svg+xml" }
+  });
+});
+app.get("/favicon.svg", (_req, res) => {
+  res.sendFile(path.join(process.cwd(), "public", "favicon.svg"));
+});
+
 // API Rate Limiting Middleware with RFC compliance
 app.use("/api", (req, res, next) => {
   const clientIp = req.ip || req.headers["x-forwarded-for"]?.toString() || "127.0.0.1";
@@ -670,8 +681,14 @@ Provide a structured, beautifully formatted response in JSON:
     });
 
     const rawText = response.text || "{}";
-    const cleaned = rawText.trim().replace(/^```json\s*/i, "").replace(/\s*```$/i, "");
-    const parsed = JSON.parse(cleaned);
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    const cleaned = jsonMatch ? jsonMatch[0] : rawText.trim().replace(/^```json\s*/i, "").replace(/\s*```$/i, "");
+    let parsed: any;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch {
+      parsed = generateFallbackNavigatorAnswer(req.body?.question || "", req.body?.context || "");
+    }
 
     globalCache.set(cacheKey, parsed, 1000 * 60 * 30);
     return res.json(parsed);
@@ -1582,6 +1599,16 @@ wss.on("connection", async (clientWs: WebSocket, req: http.IncomingMessage) => {
     }
   });
 
+  clientWs.on("error", (err) => {
+    isClosed = true;
+    console.warn("Client WebSocket stream closed or reset:", err?.message || err);
+    if (session) {
+      try {
+        session.close();
+      } catch (e) {}
+    }
+  });
+
   clientWs.on("close", () => {
     isClosed = true;
     if (session) {
@@ -1590,6 +1617,21 @@ wss.on("connection", async (clientWs: WebSocket, req: http.IncomingMessage) => {
       } catch (e) {}
     }
   });
+});
+
+// Gracefully handle transient network socket aborts (wsarecv / ECONNRESET)
+process.on("unhandledRejection", (reason: any) => {
+  const msg = reason?.message || String(reason);
+  if (
+    msg.includes("wsarecv") || 
+    msg.includes("ECONNRESET") || 
+    msg.includes("stream reading error") || 
+    msg.includes("aborted by the software in your host machine")
+  ) {
+    console.warn("Handled transient network socket closure gracefully:", msg);
+    return;
+  }
+  console.error("Unhandled Promise Rejection:", reason);
 });
 
 // Vite middleware integration

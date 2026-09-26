@@ -4,7 +4,8 @@ import {
   ArrowRight, 
   Menu, 
   X,
-  Sparkles
+  Sparkles,
+  AlertCircle
 } from 'lucide-react';
 
 interface LandingNavbarProps {
@@ -53,7 +54,14 @@ export const LandingNavbar: React.FC<LandingNavbarProps> = ({
         </div>
 
         {/* Desktop Nav Links */}
-        <nav className="hidden md:flex items-center gap-8">
+        <nav className="hidden md:flex items-center gap-6 lg:gap-7">
+          <button
+            onClick={() => scrollToSection('the-problem')}
+            className="text-xs font-bold text-rose-700 hover:text-rose-800 bg-rose-50 hover:bg-rose-100/90 px-3 py-1.5 rounded-lg border border-rose-200 transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+          >
+            <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+            <span>What is the Problem?</span>
+          </button>
           <button
             onClick={() => scrollToSection('features')}
             className="text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
@@ -127,8 +135,15 @@ export const LandingNavbar: React.FC<LandingNavbarProps> = ({
       {mobileMenuOpen && (
         <div className="sm:hidden border-t border-slate-200 bg-white p-4 space-y-3">
           <button
+            onClick={() => scrollToSection('the-problem')}
+            className="w-full text-left py-2 px-3 rounded-lg text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 flex items-center gap-2"
+          >
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>What is the Problem?</span>
+          </button>
+          <button
             onClick={() => scrollToSection('features')}
-            className="block w-full text-left py-2 text-xs font-semibold text-slate-700"
+            className="block w-full text-left py-2 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-lg"
           >
             Features
           </button>

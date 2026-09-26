@@ -80,6 +80,7 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
   // Acoustic Echo Cancellation Guards (Prevents AI from hearing itself through laptop speakers)
   const isSpeakingRef = useRef<boolean>(false);
   const lastSpokenEndTimeRef = useRef<number>(0);
+  const lastModelTextRef = useRef<string>('');
 
   useEffect(() => {
     sessionStateRef.current = sessionState;
@@ -148,16 +149,27 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
   // Helper: Send spoken query directly to Gemini 3.8 Live
   const sendSpokenQuery = useCallback((textToSend: string) => {
     // CRITICAL ACOUSTIC ECHO SHIELD:
-    // If the model is speaking or finished speaking within the last 1500ms,
+    // If the model is speaking or finished speaking within the last 2200ms,
     // REJECT immediately. This blocks the microphone from sending the model's
     // own speaker audio back to itself in an infinite loop.
-    if (isSpeakingRef.current || Date.now() < lastSpokenEndTimeRef.current + 1500) {
+    if (isSpeakingRef.current || Date.now() < lastSpokenEndTimeRef.current + 2200) {
       console.log('Echo Shield: Ignored query while model audio active:', textToSend);
       return;
     }
 
     const text = textToSend.trim();
     if (!text) return;
+
+    // Reject query if it is an acoustic echo of words the AI just said through the speaker
+    const cleanSpoken = text.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+    const cleanModel = lastModelTextRef.current.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+    if (cleanSpoken.length > 8 && cleanModel) {
+      if (cleanModel.includes(cleanSpoken) || (cleanSpoken.length > 15 && cleanModel.slice(-250).includes(cleanSpoken.slice(-25)))) {
+        console.log('Echo Shield: Suppressed query repeating model words:', text);
+        return;
+      }
+    }
+    lastModelTextRef.current = '';
 
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
@@ -560,7 +572,7 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
               const speechText = (finalChunk || interim).trim();
               if (speechText) {
                 // Secondary check before processing
-                if (isSpeakingRef.current || Date.now() < lastSpokenEndTimeRef.current + 1500) {
+                if (isSpeakingRef.current || Date.now() < lastSpokenEndTimeRef.current + 2200) {
                   return;
                 }
 
@@ -575,7 +587,7 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
                     currentInterimRef.current.trim() && 
                     sessionStateRef.current === 'active' &&
                     !isSpeakingRef.current &&
-                    Date.now() > lastSpokenEndTimeRef.current + 1500
+                    Date.now() > lastSpokenEndTimeRef.current + 2200
                   ) {
                     sendSpokenQuery(currentInterimRef.current.trim());
                   }
@@ -583,7 +595,7 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
               }
 
               if (finalChunk && finalChunk.trim()) {
-                if (!isSpeakingRef.current && Date.now() > lastSpokenEndTimeRef.current + 1500) {
+                if (!isSpeakingRef.current && Date.now() > lastSpokenEndTimeRef.current + 2200) {
                   if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
                   sendSpokenQuery(finalChunk.trim());
                 }
@@ -624,6 +636,7 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
           } else if (msg.type === 'interrupted') {
             interruptPlayback();
           } else if (msg.type === 'model_transcript' && msg.text) {
+            lastModelTextRef.current += ' ' + msg.text;
             setTranscripts(prev => {
               const last = prev[prev.length - 1];
               if (last && last.sender === 'model' && last.isStreaming) {

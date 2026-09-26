@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <rect width="64" height="64" rx="16" fill="#0f172a"/>
+  <!-- Central Pillar -->
+  <line x1="32" y1="12" x2="32" y2="48" stroke="#f59e0b" stroke-width="3" stroke-linecap="round"/>
+  <!-- Base -->
+  <path d="M22 52h20" stroke="#f59e0b" stroke-width="3" stroke-linecap="round"/>
+  <path d="M26 48h12" stroke="#f59e0b" stroke-width="3" stroke-linecap="round"/>
+  <!-- Top Finial -->
+  <circle cx="32" cy="12" r="3" fill="#f59e0b"/>
+  <!-- Beam -->
+  <line x1="14" y1="20" x2="50" y2="20" stroke="#f59e0b" stroke-width="3" stroke-linecap="round"/>
+  <!-- Left Pan Strings & Pan -->
+  <line x1="18" y1="20" x2="12" y2="34" stroke="#fbbf24" stroke-width="2"/>
+  <line x1="18" y1="20" x2="24" y2="34" stroke="#fbbf24" stroke-width="2"/>
+  <path d="M11 34c0 4 3.1 7 7 7s7-3 7-7H11z" fill="#f59e0b"/>
+  <!-- Right Pan Strings & Pan -->
+  <line x1="46" y1="20" x2="40" y2="34" stroke="#fbbf24" stroke-width="2"/>
+  <line x1="46" y1="20" x2="52" y2="34" stroke="#fbbf24" stroke-width="2"/>
+  <path d="M39 34c0 4 3.1 7 7 7s7-3 7-7H39z" fill="#f59e0b"/>
+</svg>

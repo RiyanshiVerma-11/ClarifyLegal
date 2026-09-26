@@ -19,7 +19,11 @@ import {
   Lock,
   Star,
   Layers,
-  FileCheck
+  FileCheck,
+  AlertTriangle,
+  AlertCircle,
+  XCircle,
+  Ban
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -219,6 +223,199 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                 >
                   <span>Analyze Your Contract Now</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ============================================================== */}
+      {/* DEDICATED SECTION: WHAT IS THE EXACT PROBLEM?                  */}
+      {/* Explaining the real-world crisis in ultra-simple, relatable terms */}
+      {/* ============================================================== */}
+      <section id="the-problem" className="py-20 bg-linear-to-b from-rose-50/40 via-white to-slate-50 border-b border-slate-200 scroll-mt-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Section Header */}
+          <div className="text-center max-w-3xl mx-auto space-y-4">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-100 text-rose-800 text-xs font-bold border border-rose-200 shadow-2xs">
+              <AlertTriangle className="w-4 h-4 text-rose-600" />
+              <span>The Real Problem: Why ClarifyLegal Exists</span>
+            </div>
+
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-slate-950 tracking-tight leading-tight">
+              Legal Contracts Are Intentionally Written <br className="hidden sm:inline" />
+              <span className="text-rose-600 underline decoration-rose-300 decoration-wavy underline-offset-6">
+                So You Can't Understand Them.
+              </span>
+            </h2>
+
+            <p className="text-base sm:text-lg text-slate-600 leading-relaxed">
+              Big corporations and landlords pay specialized lawyers <strong>$500 per hour</strong> to draft 25-page contracts packed with deliberate trapdoors and one-sided liabilities. Ordinary people don’t have legal teams on retainer, so <strong>over 90% of people sign completely blind</strong>.
+            </p>
+          </div>
+
+          {/* The 3 Core Pain Points (Everyday Relatable Traps) */}
+          <div className="mt-14 grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Trap 1 */}
+            <div className="bg-white rounded-3xl p-7 border-2 border-rose-100 hover:border-rose-300 transition-all shadow-sm hover:shadow-md flex flex-col justify-between relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-rose-50 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110 pointer-events-none" />
+              <div className="relative space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center font-black text-xl shadow-xs">
+                  🏠
+                </div>
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-rose-600">The Tenant Trap</span>
+                  <h3 className="text-lg font-bold text-slate-900 mt-1">Paying For Landlord Neglect</h3>
+                </div>
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 font-mono italic">
+                  "Tenant covenants sole liability for HVAC diagnostics, plumbing stoppages, and repairs under $350..."
+                </div>
+                <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
+                  <strong>The Reality:</strong> A 15-year-old water heater or AC breaks from old age? The fine print forces <em>you</em> to pay out-of-pocket. Miss a 90-day certified mail notice? Your rent automatically jumps 25%.
+                </p>
+              </div>
+              <div className="mt-6 pt-4 border-t border-slate-100 text-[11px] font-bold text-rose-700 flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>Result: Surprise $1,500 repair bills & lost deposits</span>
+              </div>
+            </div>
+
+            {/* Trap 2 */}
+            <div className="bg-white rounded-3xl p-7 border-2 border-amber-100 hover:border-amber-300 transition-all shadow-sm hover:shadow-md flex flex-col justify-between relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-amber-50 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110 pointer-events-none" />
+              <div className="relative space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center font-black text-xl shadow-xs">
+                  💻
+                </div>
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">The Freelancer Trap</span>
+                  <h3 className="text-lg font-bold text-slate-900 mt-1">IP Grabs & Net-90 Payment Delay</h3>
+                </div>
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 font-mono italic">
+                  "Contractor irrevocably assigns all pre-existing code, tools, and background frameworks throughout the universe..."
+                </div>
+                <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
+                  <strong>The Reality:</strong> The client legally steals starter code and design tools you built <em>years ago</em>. Then they put you on "Net-90" terms, holding your money for 3 months or withholding 40% arbitrarily.
+                </p>
+              </div>
+              <div className="mt-6 pt-4 border-t border-slate-100 text-[11px] font-bold text-amber-800 flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>Result: Work stolen, no pay for months, zero leverage</span>
+              </div>
+            </div>
+
+            {/* Trap 3 */}
+            <div className="bg-white rounded-3xl p-7 border-2 border-indigo-100 hover:border-indigo-300 transition-all shadow-sm hover:shadow-md flex flex-col justify-between relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110 pointer-events-none" />
+              <div className="relative space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xl shadow-xs">
+                  ⚖️
+                </div>
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">The Consumer & Employee Trap</span>
+                  <h3 className="text-lg font-bold text-slate-900 mt-1">Surrendering Rights in Forced Arbitration</h3>
+                </div>
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 font-mono italic">
+                  "All disputes resolved exclusively through confidential individual binding arbitration. Class action rights waived..."
+                </div>
+                <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
+                  <strong>The Reality:</strong> You forfeit your constitutional right to take a company to court or join other victims in a class action, forcing you into expensive private arbitration where companies usually win.
+                </p>
+              </div>
+              <div className="mt-6 pt-4 border-t border-slate-100 text-[11px] font-bold text-indigo-700 flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>Result: Complete loss of legal recourse and rights</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Solution Comparison Card: Life Before vs. Life with ClarifyLegal */}
+          <div className="mt-14 bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
+            <div className="bg-slate-900 text-white px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-400" />
+                <h3 className="text-sm sm:text-base font-bold">How ClarifyLegal Breaks The Monopoly</h3>
+              </div>
+              <span className="text-xs text-slate-300 font-medium">Giving ordinary people the power of an elite legal team</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-200">
+              {/* Without ClarifyLegal */}
+              <div className="p-6 sm:p-8 bg-rose-50/20 space-y-4">
+                <div className="flex items-center gap-2 text-rose-700">
+                  <XCircle className="w-5 h-5 shrink-0" />
+                  <span className="font-extrabold text-sm uppercase tracking-wider">Without ClarifyLegal (The Old Way)</span>
+                </div>
+                <ul className="space-y-3 text-xs sm:text-sm text-slate-700">
+                  <li className="flex items-start gap-2.5">
+                    <span className="text-rose-500 font-bold shrink-0">✕</span>
+                    <span><strong>Blind Signing:</strong> Sign 20+ pages without reading because of exhaustion and anxiety.</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="text-rose-500 font-bold shrink-0">✕</span>
+                    <span><strong>Unaffordable Advice:</strong> Can't spend $500/hr on lawyers just to check a standard apartment lease or freelance contract.</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="text-rose-500 font-bold shrink-0">✕</span>
+                    <span><strong>Zero Counter-Arguments:</strong> Have no idea what words to say to push back, so you accept unfair terms.</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="text-rose-500 font-bold shrink-0">✕</span>
+                    <span><strong>Nasty Surprises:</strong> Find out 6 months later that you owe thousands in unexpected fees or penalties.</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* With ClarifyLegal */}
+              <div className="p-6 sm:p-8 bg-emerald-50/30 space-y-4">
+                <div className="flex items-center gap-2 text-emerald-800">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <span className="font-extrabold text-sm uppercase tracking-wider">With ClarifyLegal (The GenAI Way)</span>
+                </div>
+                <ul className="space-y-3 text-xs sm:text-sm text-slate-800 font-medium">
+                  <li className="flex items-start gap-2.5">
+                    <span className="text-emerald-600 font-bold shrink-0">✓</span>
+                    <span><strong>Instant 0–100 Risk Scoring:</strong> Spot predatory traps in 10 seconds before signing your name.</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="text-emerald-600 font-bold shrink-0">✓</span>
+                    <span><strong>5th-Grade Plain English Translation:</strong> Every confusing Latin term and dense clause translated simply.</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="text-emerald-600 font-bold shrink-0">✓</span>
+                    <span><strong>1-Click Diplomatic Counter-Proposals:</strong> Generate polite counter-offer emails with ready-to-paste fair clauses.</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="text-emerald-600 font-bold shrink-0">✓</span>
+                    <span><strong>Gemini 3.8 Live Voice Sparring:</strong> Practice negotiating against simulated tough landlords or clients before you talk.</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Bottom Bar inside Comparison */}
+            <div className="p-6 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-center sm:text-left">
+                <p className="text-xs sm:text-sm font-bold text-slate-900">Stop risking your hard-earned money and peace of mind.</p>
+                <p className="text-xs text-slate-500">Analyze any contract right now in your browser with 1-click evaluation.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {onJudgeDemoLogin && (
+                  <button
+                    onClick={onJudgeDemoLogin}
+                    className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Try 1-Click Demo</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => onOpenAuth('signup')}
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>Test Your Contract Free</span>
                   <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
                 </button>
               </div>
