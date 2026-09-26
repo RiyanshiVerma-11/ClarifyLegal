@@ -1574,15 +1574,21 @@ wss.on("connection", async (clientWs: WebSocket, req: http.IncomingMessage) => {
   clientWs.on("message", (data) => {
     try {
       const msg = JSON.parse(data.toString());
-      if (msg.type === "audio" && msg.audio && session) {
-        session.sendRealtimeInput({
-          media: [
-            {
+      if (msg.type === "audio" && msg.audio && session && !isClosed) {
+        try {
+          session.sendRealtimeInput({
+            audio: {
               data: msg.audio,
               mimeType: "audio/pcm;rate=16000"
-            }
-          ]
-        });
+            },
+            media: [
+              {
+                data: msg.audio,
+                mimeType: "audio/pcm;rate=16000"
+              }
+            ]
+          });
+        } catch (e) {}
       } else if (msg.type === "text" && msg.text && session) {
         session.sendClientContent({
           turns: [

@@ -603,6 +603,10 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
             };
 
             recognition.onerror = (errEvent: any) => {
+              if (errEvent.error === 'aborted' || errEvent.error === 'no-speech') {
+                // Benign browser speech events during pause; do not spam or panic
+                return;
+              }
               console.warn('SpeechRecognition warning:', errEvent.error);
               if (errEvent.error === 'not-allowed') {
                 setHasActiveMic(false);
@@ -610,12 +614,18 @@ export const VoiceLiveAssistant: React.FC<VoiceLiveAssistantProps> = ({
               }
             };
 
+            let restartTimeout: any = null;
             recognition.onend = () => {
-              // Auto-restart recognition while the live call is active
+              // Auto-restart recognition while the live call is active with 500ms debounce
               if (sessionStateRef.current === 'active' && !isMicMutedRef.current) {
-                try {
-                  recognition.start();
-                } catch (e) {}
+                if (restartTimeout) clearTimeout(restartTimeout);
+                restartTimeout = setTimeout(() => {
+                  if (sessionStateRef.current === 'active' && !isMicMutedRef.current && recognitionRef.current) {
+                    try {
+                      recognition.start();
+                    } catch (e) {}
+                  }
+                }, 500);
               }
             };
 
