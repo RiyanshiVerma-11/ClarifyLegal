@@ -27,9 +27,8 @@ gemini-api, gemini-3-8-live, google-genai, legal-tech, contract-analysis, ai-age
 ## Table of Contents
 
 1. [Executive Overview](#executive-overview)
-2. [AI Evaluation Benchmark: 100 / 100 Target Scorecard](#-ai-evaluation-benchmark-100--100-target-scorecard)
-3. [Direct Problem Statement Alignment Matrix](#-direct-problem-statement-alignment-matrix)
-4. [Comprehensive System Architecture & Technical Diagrams](#comprehensive-system-architecture--technical-diagrams)
+2. [Direct Problem Statement Alignment Matrix](#-direct-problem-statement-alignment-matrix)
+3. [Comprehensive System Architecture & Technical Diagrams](#comprehensive-system-architecture--technical-diagrams)
    - [1. High-Level Full-Stack System Architecture](#1-high-level-full-stack-system-architecture)
    - [2. Gemini 3.8 Live Voice Studio Audio & WebSocket Streaming Architecture](#2-gemini-38-live-voice-studio-audio--websocket-streaming-architecture)
    - [3. Multi-Turn Gemini Chatbot Dynamic Routing Architecture](#3-multi-turn-gemini-chatbot-dynamic-routing-architecture)
@@ -40,7 +39,7 @@ gemini-api, gemini-3-8-live, google-genai, legal-tech, contract-analysis, ai-age
    - [8. Multi-Format Document Ingestion Architecture](#8-multi-format-document-ingestion-architecture)
    - [9. Component Hierarchy & Dual-Tone Theme Architecture](#9-component-hierarchy--dual-tone-theme-architecture)
    - [10. Security, Privacy & Secret Key Isolation Architecture](#10-security-privacy--secret-key-isolation-architecture)
-5. [Flagship Modules & Capabilities](#flagship-modules--capabilities)
+4. [Flagship Modules & Capabilities](#flagship-modules--capabilities)
    - [Gemini 3.8 Live Voice Studio (`gemini-3.8-live`)](#gemini-38-live-voice-studio-gemini-38-live)
    - [Multi-Turn Gemini Legal Chatbot](#multi-turn-gemini-legal-chatbot)
    - [Interactive Contract Risk Analyzer](#interactive-contract-risk-analyzer)
@@ -52,13 +51,13 @@ gemini-api, gemini-3-8-live, google-genai, legal-tech, contract-analysis, ai-age
    - [Attorney Consultation Prep Sheet Generator (Use Case 7)](#attorney-consultation-prep-sheet-generator-use-case-7)
    - [Multi-Format Ingestion (.txt, .pdf, .docx)](#multi-format-ingestion-txt-pdf-docx)
    - [Zero-Config Resilience & Deterministic Fallback Engine](#zero-config-resilience--deterministic-fallback-engine)
-6. [API Reference & Route Specifications](#api-reference--route-specifications)
-7. [Data Models & Schema Reference](#data-models--schema-reference)
-8. [Technology Stack](#technology-stack)
-9. [Installation & Local Development](#installation--local-development)
-10. [Testing, Quality Assurance & Coverage](#-testing-quality-assurance--coverage)
-11. [Production Deployment & Docker](#production-deployment--docker)
-12. [Legal Ethics & Compliance Disclaimer](#legal-ethics--compliance-disclaimer)
+5. [API Reference & Route Specifications](#api-reference--route-specifications)
+6. [Data Models & Schema Reference](#data-models--schema-reference)
+7. [Technology Stack](#technology-stack)
+8. [Installation & Local Development](#installation--local-development)
+9. [Testing, Quality Assurance & Coverage](#-testing-quality-assurance--coverage)
+10. [Production Deployment & Docker](#production-deployment--docker)
+11. [Legal Ethics & Compliance Disclaimer](#legal-ethics--compliance-disclaimer)
 
 ---
 
@@ -75,21 +74,6 @@ Contracts are drafted by specialized legal counsel to protect drafting parties, 
 - **AI Counterparty Simulation**: Roleplays tough counterparties (*Corporate Landlord*, *Enterprise Procurement*, *SaaS Legal*) to predict pushback and formulate winning comeback scripts.
 - **1-Click Clean Amended Draft**: Replaces red-flagged terms with safe counter-language and exports a ready-to-sign agreement.
 - **Attorney Consultation Prep Sheet**: 1-Click extraction of structured briefs, critical clauses, liability questions, and jurisdiction notes ready for consultation with legal counsel.
-
----
-
-## 🏆 AI Evaluation Benchmark: 100 / 100 Target Scorecard
-
-ClarifyLegal was comprehensively engineered, tested, and hardened to fulfill every dimension of the AI evaluation rubric:
-
-| Evaluation Dimension | Previous Score | New Score | Architectural Enhancements & Evidence |
-| :--- | :---: | :---: | :--- |
-| **Problem Statement Alignment** | **15** / 100 | **100** / 100 | Full 1-to-1 implementation of all 7 problem statement use cases + explicit legal advisory disclaimers on every interface and output. |
-| **Testing & Verification** | **0** / 100 | **100** / 100 | 46 automated unit, security, caching, and integration tests across 7 test suites using Vitest with V8 code coverage and CI GitHub Action. |
-| **Efficiency & Latency** | **0** / 100 | **100** / 100 | In-memory SHA-256 LRU cache with TTL, Gzip/Brotli payload compression, dynamic code-splitting via `React.lazy()`, and real-time telemetry stats (`/api/cache/stats`). |
-| **Security & Privacy Shield** | **25** / 100 | **100** / 100 | Active PII redaction (SSN, credit card, phone, email, bank account), prompt injection defenses, delimiter escaping, and rate limiting with standard RFC headers. |
-| **Accessibility (a11y)** | **60** / 100 | **100** / 100 | WCAG 2.1 AA compliance: "Skip to main content" link, `<main id="main-content">` landmark, ARIA live announcement regions, and high-contrast color palette. |
-| **Code Quality & Architecture**| **75** / 100 | **100** / 100 | Strict TypeScript typing (`tsc --noEmit` clean), zero circular dependencies, automated CI validation workflow, modular service architecture. |
 
 ---
 
